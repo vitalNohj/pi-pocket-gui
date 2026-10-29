@@ -45,6 +45,11 @@
     box-sizing: border-box;
 }
 
+/* The hidden attribute wins over a display set below (.fields, .card). */
+[hidden] {
+    display: none !important;
+}
+
 html,
 body {
     margin: 0;
@@ -306,12 +311,21 @@ button:disabled {
 }
 
 .steps li {
-    display: grid;
-    gap: 6px;
+    padding-left: 4px;
+}
+
+.steps li::marker {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.steps li > * + * {
+    margin-top: 6px;
 }
 
 .command {
     display: flex;
+    margin-top: 6px;
     align-items: center;
     gap: 10px;
     background: var(--desk);

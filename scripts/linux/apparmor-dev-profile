@@ -1,0 +1,12 @@
+# Lets the Electron binary in nohj's pi-pocket-gui checkout use Chromium's user-namespace sandbox on Ubuntu 23.10+,
+# which restricts unprivileged user namespaces. Scoped to that one executable; everything else keeps the restriction.
+# The .deb build ships its own profile (electron-builder's), so this is for development only.
+#   sudo cp scripts/linux/apparmor-dev-profile /etc/apparmor.d/pi-pocket-gui-dev
+#   sudo apparmor_parser -r /etc/apparmor.d/pi-pocket-gui-dev
+abi <abi/5.0>,
+include <tunables/global>
+
+profile pi-pocket-gui-dev /home/nohj/pi-pocket-gui/node_modules/electron/dist/electron flags=(unconfined) {
+    userns,
+    @{exec_path} mr,
+}

@@ -23,6 +23,20 @@ const TYPES: Record<string, string> = {
 const CSP =
     "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
+/**
+ * Is this address one of the app's own pages? URL's origin is "null" for a scheme Node does not know, so the scheme
+ * and host are compared instead.
+ */
+export function isAppPage(url: string): boolean {
+    try {
+        const parsed = new URL(url);
+
+        return parsed.protocol === `${APP_SCHEME}:` && parsed.host === "app";
+    } catch {
+        return false;
+    }
+}
+
 /** Must run before the app is ready. */
 export function registerAppScheme(): void {
     protocol.registerSchemesAsPrivileged([

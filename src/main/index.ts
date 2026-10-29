@@ -21,7 +21,7 @@ import {
 } from "electron";
 import type { ConfigReason, ConfigState, ProbeResult, Settings, SettingsProblem } from "../shared/types";
 import { retryDelayMs } from "./backoff";
-import { APP_ORIGIN, CONFIG_URL, registerAppScheme, serveAppPages } from "./config-protocol";
+import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
 import { setLaunchAtLogin, startedAtLogin, trayAvailable } from "./platform";
 import { networkMessage, probe } from "./probe";
 import { guardContents, guardSession, openOutside, type OriginPolicy } from "./security";
@@ -357,7 +357,10 @@ function lockConfigView(): void {
     const contents = gui!.config.webContents;
 
     contents.on("will-navigate", (event) => {
-        event.preventDefault();
+        // Its own pages only (a reload): links in it go through the main process.
+        if (!isAppPage(event.url)) {
+            event.preventDefault();
+        }
     });
     contents.setWindowOpenHandler(() => ({ action: "deny" }));
 }
@@ -749,7 +752,7 @@ function fromConfigPage(event: IpcMainInvokeEvent): boolean {
         event.sender === gui.config.webContents &&
         frame !== null &&
         frame.parent === null &&
-        new URL(frame.url).origin === APP_ORIGIN
+        isAppPage(frame.url)
     );
 }
 
@@ -771,9 +774,12 @@ function registerIpc(): void {
             throw new Error("Not an address");
         }
 
-        const result = await checkAddress(url);
+        // The person checks another address: the background tries of the saved one would only confuse.
+        if (!sameAddress(url, gui!.settings.server.url)) {
+            stopRetry();
+        }
 
-        return result;
+        return checkAddress(url);
     });
 
     handle("config:save", (_event, input) => {
