@@ -1,0 +1,81 @@
+{
+    "name": "pi-pocket-gui",
+    "productName": "Pi Pocket",
+    "version": "0.1.0",
+    "description": "Desktop app for a Pi Pocket server: tray, badge, native notifications, and offline dictation.",
+    "license": "MIT",
+    "author": "vitalNohj",
+    "homepage": "https://github.com/vitalNohj/pi-pocket-gui",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/vitalNohj/pi-pocket-gui.git"
+    },
+    "main": "dist/main/index.js",
+    "private": true,
+    "scripts": {
+        "build": "node scripts/clean.mjs && tsc -p tsconfig.main.json && tsc -p tsconfig.renderer.json && node scripts/copy-static.mjs",
+        "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+        "start": "npm run build && electron .",
+        "test": "npm run build && node --test dist/test/*.test.js",
+        "dist:linux": "npm run build && electron-builder --linux",
+        "dist:mac": "npm run build && electron-builder --mac",
+        "dist:win": "npm run build && electron-builder --win"
+    },
+    "build": {
+        "appId": "io.github.vitalnohj.pipocketgui",
+        "productName": "Pi Pocket",
+        "executableName": "pi-pocket-gui",
+        "artifactName": "pi-pocket-gui-${version}-${os}-${arch}.${ext}",
+        "directories": {
+            "output": "release"
+        },
+        "files": [
+            "dist/**/*",
+            "!dist/test/**",
+            "assets/**/*",
+            "package.json"
+        ],
+        "publish": [
+            {
+                "provider": "github",
+                "owner": "vitalNohj",
+                "repo": "pi-pocket-gui"
+            }
+        ],
+        "linux": {
+            "target": [
+                "AppImage",
+                "deb"
+            ],
+            "category": "Development",
+            "icon": "assets/icon-512.png",
+            "maintainer": "vitalNohj <vitalNohj@users.noreply.github.com>",
+            "synopsis": "Desktop app for Pi Pocket"
+        },
+        "mac": {
+            "target": [
+                "dmg",
+                "zip"
+            ],
+            "category": "public.app-category.developer-tools",
+            "icon": "assets/icon-512.png"
+        },
+        "win": {
+            "target": [
+                "nsis"
+            ],
+            "icon": "assets/icon-512.png"
+        },
+        "nsis": {
+            "oneClick": false,
+            "perMachine": false
+        }
+    },
+    "devDependencies": {
+        "@types/node": "22.20.5",
+        "electron": "45.1.0",
+        "electron-builder": "26.18.1",
+        "typescript": "5.9.3"
+    },
+    "dependencies": {}
+}

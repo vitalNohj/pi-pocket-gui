@@ -1,0 +1,117 @@
+/**
+ * Types shared by the main process, the preloads, and the config page. Types only: a sandboxed preload cannot load a
+ * module of its own, so nothing here may exist at run time.
+ */
+
+/** When a notification about an approval offers Allow. Deny is always offered. */
+export type AllowFromNotification = "whenFullyShown" | "always" | "never";
+
+/** Where a link to the server's own pages that asks for a new window opens: a plain window of this app (signed in), or the system browser. */
+export type SameOriginLinks = "appWindow" | "browser";
+
+/** Every setting, as stored in config.json. */
+export interface Settings {
+    server: {
+        /** The server's address: scheme, host, port, and an optional path. */
+        url: string;
+        /** Other origins the window may load, e.g. a sign-in page in front of the server (Cloudflare Access). */
+        extraOrigins: string[];
+    };
+    connection: {
+        /** Open the server at start when it answers, instead of the config screen. */
+        autoConnect: boolean;
+        /** How long one check of the server may take. */
+        probeTimeoutMs: number;
+        /** The longest wait between two tries while the server cannot be reached. */
+        retryMaxSeconds: number;
+        /** While connected, how often the server is checked. 0 turns the checks off. */
+        healthIntervalSeconds: number;
+        /** Failed checks in a row before the config screen shows the outage. */
+        failuresBeforeOutage: number;
+    };
+    window: {
+        /** Closing the window hides it in the tray (minimizes it when there is no tray). */
+        closeToTray: boolean;
+        /** Start the app when you sign in to the computer. */
+        launchAtLogin: boolean;
+        /** Start hidden in the tray. */
+        startHidden: boolean;
+        /** Always show the menu bar (Linux and Windows); otherwise Alt shows it. */
+        showMenuBar: boolean;
+        /** A global shortcut that shows or hides the window. */
+        hotkeyEnabled: boolean;
+        /** Electron accelerator syntax, e.g. "CommandOrControl+Shift+P". */
+        hotkey: string;
+        sameOriginLinks: SameOriginLinks;
+    };
+    notifications: {
+        enabled: boolean;
+        /** Play the system's sound. */
+        sound: boolean;
+        allowFromNotification: AllowFromNotification;
+        /** The longest call text an approval notification shows; longer ones are cut and marked. */
+        maxCallLength: number;
+    };
+    updates: {
+        /** Look for new versions of this app. Pi Pocket itself updates on the server. */
+        check: boolean;
+        intervalHours: number;
+    };
+}
+
+/** One value in config.json that was not valid and fell back to its default. */
+export interface SettingsProblem {
+    path: string;
+    message: string;
+}
+
+/** What a check of an address found. */
+export type ProbeResult =
+    | { kind: "detected"; url: string; bridge: number; via: "info" | "manifest" }
+    | { kind: "other"; url: string; status: number; message: string }
+    | { kind: "unreachable"; url: string; message: string }
+    | { kind: "invalid"; url: string; message: string };
+
+/** Why the config screen is open. */
+export type ConfigReason =
+    | { kind: "first-run" }
+    | { kind: "user" }
+    | { kind: "not-detected"; probe: ProbeResult }
+    | { kind: "load-failed"; url: string; message: string }
+    | { kind: "outage"; url: string; message: string }
+    | { kind: "crashed"; message: string };
+
+/** What the config page shows. */
+export interface ConfigState {
+    settings: Settings;
+    defaults: Settings;
+    problems: SettingsProblem[];
+    configPath: string;
+    reason: ConfigReason;
+    /** The last check of the configured address, once there is one. */
+    probe?: ProbeResult;
+    /** When the next automatic try is, while the server cannot be reached (ms since the epoch). */
+    nextRetryAt?: number;
+    /** The server was open before the config screen: the page offers to go back. */
+    canReturn: boolean;
+    /** The desktop has a tray. Without one, close minimizes. */
+    trayAvailable: boolean;
+    platform: string;
+    appVersion: string;
+}
+
+/** What the config page can ask of the main process. */
+export interface GuiConfigApi {
+    state(): Promise<ConfigState>;
+    probe(url: string): Promise<ProbeResult>;
+    /** Saves the settings, and returns the stored (checked) state. */
+    save(settings: Settings): Promise<ConfigState>;
+    /** Saves the address and opens the server. */
+    connect(url: string): Promise<void>;
+    /** Goes back to the server without changing anything. */
+    back(): Promise<void>;
+    retryNow(): Promise<void>;
+    openExternal(target: "github" | "docs" | "releases"): Promise<void>;
+    showConfigFile(): Promise<void>;
+    onState(listener: (state: ConfigState) => void): () => void;
+}

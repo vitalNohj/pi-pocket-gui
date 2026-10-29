@@ -1,0 +1,455 @@
+/* The config screen, in Pi Pocket's default look: Tokyo Night, Geist, JetBrains Mono, soft tiles on hairlines. */
+@font-face {
+    font-family: "Geist";
+    src: url("fonts/Geist.woff2") format("woff2");
+    font-weight: 100 900;
+}
+
+@font-face {
+    font-family: "JetBrains Mono";
+    src: url("fonts/JetBrainsMono.woff2") format("woff2");
+    font-weight: 100 800;
+}
+
+:root {
+    --o-bg: #1a1b26;
+    --o-bg-dark: #13141c;
+    --o-bg-darker: #0e0e14;
+    --o-fg: #a9b1d6;
+    --o-fg-bright: #c0caf5;
+    --o-accent: #7aa2f7;
+    --o-red: #f7768e;
+    --o-yellow: #e0af68;
+    --o-orange: #ff9e64;
+    --o-green: #9ece6a;
+
+    --bg: var(--o-bg);
+    --desk: var(--o-bg-darker);
+    --card: color-mix(in srgb, var(--o-fg) 4%, var(--bg));
+    --card-2: color-mix(in srgb, var(--o-fg) 8%, var(--bg));
+    --hover: color-mix(in srgb, var(--o-fg) 7%, transparent);
+    --hair: color-mix(in srgb, var(--o-fg) 10%, transparent);
+    --hair-2: color-mix(in srgb, var(--o-fg) 17%, transparent);
+    --text: var(--o-fg-bright);
+    --body: var(--o-fg);
+    --muted: color-mix(in oklab, var(--o-fg) 76%, var(--bg));
+    --accent: var(--o-accent);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --sans: "Geist", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+    color-scheme: dark;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    background: var(--desk);
+    color: var(--body);
+    font: 15px/1.5 var(--sans);
+}
+
+.page {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 32px 20px 48px;
+    display: grid;
+    gap: 16px;
+}
+
+h1,
+h2 {
+    color: var(--text);
+    margin: 0;
+    font-weight: 600;
+}
+
+h1 {
+    font-size: 22px;
+}
+
+h2 {
+    font-size: 16px;
+}
+
+p {
+    margin: 0;
+}
+
+code {
+    font-family: var(--mono);
+    font-size: 0.9em;
+    color: var(--text);
+}
+
+.muted {
+    color: var(--muted);
+}
+
+.small {
+    font-size: 13px;
+}
+
+.error {
+    color: var(--o-red);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.brand > div {
+    flex: 1;
+}
+
+.logo {
+    border-radius: 10px;
+}
+
+.card {
+    background: var(--bg);
+    border: 1px solid var(--hair);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    display: grid;
+    gap: 12px;
+}
+
+.connection {
+    border-color: var(--hair-2);
+    box-shadow: 0 8px 28px rgb(0 0 0 / 28%);
+}
+
+.card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.pill {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid currentcolor;
+    white-space: nowrap;
+}
+
+.pill[data-state="detected"] {
+    color: var(--o-green);
+}
+
+.pill[data-state="not-detected"] {
+    color: var(--o-red);
+}
+
+.pill[data-state="checking"] {
+    color: var(--muted);
+}
+
+.pill[data-state="other"] {
+    color: var(--o-yellow);
+}
+
+.banner {
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    border: 1px solid color-mix(in srgb, var(--o-red) 50%, transparent);
+    background: color-mix(in srgb, var(--o-red) 10%, var(--bg));
+    color: var(--text);
+}
+
+.banner[data-tone="info"] {
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    background: color-mix(in srgb, var(--accent) 9%, var(--bg));
+}
+
+.mode {
+    display: flex;
+    gap: 16px;
+    font-size: 14px;
+}
+
+.mode label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.fields {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.field {
+    display: grid;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.field.wide,
+.field.grow {
+    flex: 1 1 200px;
+}
+
+.field.port {
+    width: 96px;
+}
+
+input[type="text"],
+input[type="number"],
+select,
+textarea {
+    font: 15px var(--mono);
+    color: var(--text);
+    background: var(--card);
+    border: 1px solid var(--hair-2);
+    border-radius: var(--radius-sm);
+    padding: 9px 11px;
+    min-width: 0;
+    width: 100%;
+}
+
+select {
+    font-family: var(--sans);
+}
+
+textarea {
+    resize: vertical;
+    font-size: 13px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+input.short,
+select.short {
+    width: 130px;
+}
+
+.row select {
+    width: auto;
+    max-width: 260px;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+button {
+    font: 600 14px var(--sans);
+    border-radius: var(--radius-sm);
+    padding: 9px 16px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    color: var(--text);
+    background: transparent;
+}
+
+button.small {
+    padding: 4px 10px;
+    font-size: 13px;
+}
+
+button.primary {
+    background: var(--accent);
+    color: var(--o-bg-dark);
+}
+
+button.primary:hover {
+    background: color-mix(in srgb, var(--accent) 88%, white);
+}
+
+button.secondary {
+    background: var(--card-2);
+    border-color: var(--hair-2);
+}
+
+button.secondary:hover,
+button.ghost:hover {
+    background: var(--hover);
+}
+
+button.ghost {
+    border-color: var(--hair);
+}
+
+button:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.steps {
+    margin: 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 10px;
+}
+
+.steps li {
+    display: grid;
+    gap: 6px;
+}
+
+.command {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--desk);
+    border: 1px solid var(--hair);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    overflow-x: auto;
+}
+
+.command code {
+    flex: 1;
+    white-space: nowrap;
+    color: var(--o-green);
+}
+
+.settings {
+    display: grid;
+    gap: 12px;
+}
+
+details.card {
+    padding: 0;
+    gap: 0;
+}
+
+summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: var(--radius);
+}
+
+summary::-webkit-details-marker {
+    display: none;
+}
+
+summary::after {
+    content: "›";
+    color: var(--muted);
+    font-size: 20px;
+    transition: transform 120ms ease;
+}
+
+details[open] summary::after {
+    transform: rotate(90deg);
+}
+
+.rows {
+    display: grid;
+    padding: 0 20px 12px;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-top: 1px solid var(--hair);
+}
+
+.row.stack {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.row > span {
+    display: grid;
+    gap: 2px;
+}
+
+.row strong {
+    color: var(--text);
+    font-weight: 500;
+}
+
+.row small {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+input[type="checkbox"] {
+    appearance: none;
+    flex: none;
+    width: 40px;
+    height: 22px;
+    border-radius: 999px;
+    background: var(--card-2);
+    border: 1px solid var(--hair-2);
+    position: relative;
+    cursor: pointer;
+    transition: background 120ms ease;
+}
+
+input[type="checkbox"]::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: transform 120ms ease, background 120ms ease;
+}
+
+input[type="checkbox"]:checked {
+    background: color-mix(in srgb, var(--accent) 35%, var(--bg));
+    border-color: var(--accent);
+}
+
+input[type="checkbox"]:checked::after {
+    transform: translateX(18px);
+    background: var(--accent);
+}
+
+.problems {
+    border-color: color-mix(in srgb, var(--o-yellow) 45%, transparent);
+}
+
+.problems ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 13px;
+}
+
+.footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        transition: none !important;
+    }
+}
