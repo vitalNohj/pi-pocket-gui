@@ -17,9 +17,9 @@
         "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
         "start": "npm run build && electron .",
         "test": "npm run build && node --test dist/test/*.test.js",
-        "dist:linux": "npm run build && electron-builder --linux",
-        "dist:mac": "npm run build && electron-builder --mac",
-        "dist:win": "npm run build && electron-builder --win"
+        "dist:linux": "npm run build && electron-builder --publish never --linux",
+        "dist:mac": "npm run build && electron-builder --publish never --mac",
+        "dist:win": "npm run build && electron-builder --publish never --win"
     },
     "build": {
         "appId": "io.github.vitalnohj.pipocketgui",
@@ -54,11 +54,28 @@
         },
         "mac": {
             "target": [
-                "dmg",
-                "zip"
+                {
+                    "target": "dmg",
+                    "arch": [
+                        "arm64",
+                        "x64"
+                    ]
+                },
+                {
+                    "target": "zip",
+                    "arch": [
+                        "arm64",
+                        "x64"
+                    ]
+                }
             ],
             "category": "public.app-category.developer-tools",
-            "icon": "assets/icon-512.png"
+            "icon": "assets/icon-512.png",
+            "identity": "-",
+            "hardenedRuntime": false,
+            "extendInfo": {
+                "NSMicrophoneUsageDescription": "Pi Pocket uses the microphone for dictation in the message box."
+            }
         },
         "win": {
             "target": [
@@ -69,6 +86,9 @@
         "nsis": {
             "oneClick": false,
             "perMachine": false
+        },
+        "dmg": {
+            "title": "Pi Pocket ${version}"
         }
     },
     "devDependencies": {

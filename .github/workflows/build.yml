@@ -1,0 +1,87 @@
+# Builds the app for macOS (.dmg, .zip), Linux (AppImage, .deb), and Windows (installer) on GitHub's runners.
+# Every push to main and every manual run keeps the files as the run's artifacts (Actions → the run → Artifacts).
+# A tag like v0.1.0 also publishes them as a GitHub release.
+#
+# The builds are not signed with an Apple or Microsoft certificate yet. The macOS app is signed ad hoc, which Apple
+# Silicon needs to run it at all; Gatekeeper still asks the first time (README.md says how to open it).
+name: Build
+
+on:
+    push:
+        branches: [main]
+        tags: ["v*"]
+    pull_request:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: build-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+            - run: npm ci
+            - run: npm run typecheck
+            - run: npm test
+
+    build:
+        needs: test
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - os: macos-latest
+                      script: dist:mac
+                      name: macos
+                    - os: ubuntu-latest
+                      script: dist:linux
+                      name: linux
+                    - os: windows-latest
+                      script: dist:win
+                      name: windows
+        runs-on: ${{ matrix.os }}
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+            - run: npm ci
+            - run: npm run ${{ matrix.script }}
+              env:
+                  # No certificate: never look for one in the runner's keychain.
+                  CSC_IDENTITY_AUTO_DISCOVERY: "false"
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: pi-pocket-gui-${{ matrix.name }}
+                  path: |
+                      release/*.dmg
+                      release/*.zip
+                      release/*.AppImage
+                      release/*.deb
+                      release/*.exe
+                  if-no-files-found: error
+
+    release:
+        if: startsWith(github.ref, 'refs/tags/v')
+        needs: build
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/download-artifact@v4
+              with:
+                  path: dist
+                  merge-multiple: true
+            - run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+              env:
+                  GH_TOKEN: ${{ github.token }}
