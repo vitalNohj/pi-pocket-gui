@@ -8,6 +8,7 @@ import {
     app,
     BaseWindow,
     BrowserWindow,
+    dialog,
     globalShortcut,
     ipcMain,
     Menu,
@@ -22,6 +23,7 @@ import {
 import type { ConfigReason, ConfigState, ProbeResult, Settings, SettingsProblem } from "../shared/types";
 import { retryDelayMs } from "./backoff";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
+import { setUpDesktop } from "./desktop";
 import { setLaunchAtLogin, startedAtLogin, trayAvailable } from "./platform";
 import { networkMessage, probe } from "./probe";
 import { guardContents, guardSession, openOutside, type OriginPolicy } from "./security";
@@ -77,6 +79,10 @@ interface Gui {
     retryAttempt: number;
     health: { timer: NodeJS.Timeout; failures: number } | undefined;
     quitting: boolean;
+    /** The host bridge's main-process side (src/main/desktop.ts). */
+    desktop: ReturnType<typeof setUpDesktop> | undefined;
+    /** The notice about a server without the bridge was shown in this run. */
+    toldNoBridge: boolean;
 }
 
 let gui: Gui | undefined;
@@ -115,6 +121,8 @@ async function start(): Promise<void> {
     const server = new WebContentsView({
         webPreferences: {
             session: serverSession,
+            // window.pocketHost, the host bridge; the main process decides at its start whether the page gets it.
+            preload: join(__dirname, "..", "preload", "server.js"),
             contextIsolation: true,
             sandbox: true,
             nodeIntegration: false,
@@ -159,7 +167,39 @@ async function start(): Promise<void> {
         retryAttempt: 0,
         health: undefined,
         quitting: false,
+        desktop: undefined,
+        toldNoBridge: false,
     };
+
+    gui.desktop = setUpDesktop({
+        assets: ASSETS,
+        window: () => window,
+        contents: () => server.webContents,
+        origin: () => currentOrigin(),
+        settings: () => gui!.settings,
+        showingServer: () => gui?.showing === "server",
+        showServer: () => {
+            if (gui === undefined || gui.loadedUrl === undefined) {
+                return false;
+            }
+
+            if (gui.showing !== "server") {
+                gui.reason = { kind: "user" };
+                show("server");
+            }
+
+            return true;
+        },
+        tray: () => gui?.tray,
+        showWindow,
+        toggleWindow,
+        openSettings,
+        quit,
+    });
+
+    for (const change of ["show", "hide", "minimize", "restore", "focus"] as const) {
+        window.on(change as "show", () => gui?.desktop?.visibilityChanged());
+    }
 
     const policy: OriginPolicy = {
         server: () => currentOrigin(),
@@ -285,6 +325,7 @@ function show(which: "server" | "config"): void {
     gui.config.setVisible(which === "config");
     (which === "server" ? gui.server : gui.config).webContents.focus();
     gui.window.setTitle(which === "server" ? gui.server.webContents.getTitle() || "Pi Pocket" : "Pi Pocket — Server settings");
+    gui.desktop?.visibilityChanged();
 }
 
 function showWindow(): void {
@@ -458,6 +499,50 @@ function watchServerView(): void {
             gui.window.setTitle(title || "Pi Pocket");
         }
     });
+
+    // A new page in the view: what the last one said (pins, badge) no longer holds, and the new one says it again.
+    contents.on("did-navigate", () => {
+        gui?.desktop?.reset();
+    });
+
+    contents.on("did-finish-load", () => {
+        tellNoBridge();
+    });
+}
+
+/**
+ * Once in each run: a server without the bridge (an older Pi Pocket) still works, but without the badge, pins, and
+ * notifications. Say so, on the server's own address only.
+ */
+function tellNoBridge(): void {
+    const state = gui!;
+    const probe = state.probe;
+
+    if (
+        state.toldNoBridge ||
+        probe?.kind !== "detected" ||
+        probe.bridge > 0 ||
+        originOf(state.server.webContents.getURL()) !== currentOrigin()
+    ) {
+        return;
+    }
+
+    state.toldNoBridge = true;
+    void dialog.showMessageBox(state.window, {
+        type: "info",
+        title: "Pi Pocket",
+        message: "This server doesn't support desktop features yet.",
+        detail: "Please update it. Until then, the tray's pins, the badge, and native notifications stay off; everything else works.",
+        buttons: ["OK"],
+    });
+}
+
+function originOf(url: string): string | undefined {
+    try {
+        return new URL(url).origin;
+    } catch {
+        return undefined;
+    }
 }
 
 /** Opens one of the server's own pages that asked for a new window: in a plain window of this app, or outside. */
@@ -656,21 +741,16 @@ function applyDesktopSettings(before: Settings | undefined): void {
     if (state.tray === undefined && state.trayAvailable) {
         state.tray = createTray();
     }
+
+    state.desktop?.refreshTray();
 }
 
+/** The tray icon. Its menu and image (the pins, a dot when sessions need you) come from src/main/desktop.ts. */
 function createTray(): Tray {
     const image = nativeImage.createFromPath(join(ASSETS, "icon-192.png")).resize({ width: 22, height: 22 });
     const tray = new Tray(image);
 
     tray.setToolTip("Pi Pocket");
-    tray.setContextMenu(
-        Menu.buildFromTemplate([
-            { label: "Open Pi Pocket", click: showWindow },
-            { label: "Server settings…", click: openSettings },
-            { type: "separator" },
-            { label: "Quit", click: quit },
-        ]),
-    );
     tray.on("click", toggleWindow);
 
     return tray;

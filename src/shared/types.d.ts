@@ -100,6 +100,51 @@ export interface ConfigState {
     appVersion: string;
 }
 
+/** A pinned session's state, as the square in Pi Pocket's session list shows it (`data-state`). */
+export type PinState = "waiting" | "limited" | "working" | "failed" | "fresh" | "seen";
+
+/** One pinned session, for the tray menu. */
+export interface PinnedSession {
+    id: number;
+    title: string;
+    state: PinState;
+    /** The state in words. */
+    label: string;
+    /** The path to open on the server, such as "/s/12". */
+    url: string;
+}
+
+/** A notification the server sent this app's page (docs/desktop.md in Pi Pocket). */
+export interface HostNotification {
+    title: string;
+    body: string;
+    /** The path a click opens: "/s/12", "/?pip=1", or "/". */
+    url: string;
+    /** One notification per tag: a newer one replaces it. */
+    tag: string;
+    urgency: "normal" | "high";
+    approval?: {
+        id: string;
+        /** The whole call, never cut. */
+        call: string;
+        /** The person may allow it. */
+        may: boolean;
+        /** Web Push's rule: may, and the call fits on one short line. */
+        allow: boolean;
+    };
+}
+
+/** An event the app sends the server's page (`pocketHost.subscribe`). */
+export type HostEvent =
+    | { type: "visibility"; visible: boolean }
+    | { type: "open"; url: string }
+    | { type: "approve"; id: string; allow: boolean };
+
+/** What the server page's preload learns when it starts: whether it may offer the bridge, and the window's state. */
+export interface HostHello {
+    visible: boolean;
+}
+
 /** What the config page can ask of the main process. */
 export interface GuiConfigApi {
     state(): Promise<ConfigState>;
