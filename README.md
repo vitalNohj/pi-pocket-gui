@@ -16,7 +16,7 @@ Then open the app, put the server's address (default `http://127.0.0.1:8787`), a
 
 Download the file for your computer from [Releases](https://github.com/vitalNohj/pi-pocket-gui/releases/latest):
 
-- **macOS:** `…-mac-arm64.dmg` (Apple Silicon) or `…-mac-x64.dmg` (Intel). Open it and drag the app into Applications. The app is not signed by Apple yet, so the first time, right-click it and choose **Open**; if macOS still refuses, use **Open Anyway** in System Settings → Privacy & Security, or run `xattr -cr /Applications/pi-pocket-gui.app`.
+- **macOS:** `…-mac-arm64.dmg` (Apple Silicon) or `…-mac-x64.dmg` (Intel). Open it and drag the app into Applications. The app is not signed by Apple yet, so the first time, right-click it and choose **Open**; if macOS still refuses, use **Open Anyway** in System Settings → Privacy & Security, or run `xattr -cr "/Applications/Pi Pocket.app"`. (Version 0.1.0 was named `pi-pocket-gui.app`: after installing a newer one, move the old one to the Trash.)
 - **Windows:** `…-win-x64.exe`. Windows SmartScreen warns about an unsigned app: **More info** → **Run anyway**.
 - **Linux:** `…-linux-x86_64.AppImage` (make it executable and run it), or `…-linux-amd64.deb`.
 
@@ -37,6 +37,16 @@ Everything is in **Server settings…** (the File menu, the tray, or Ctrl+,), an
 - Windows: `%APPDATA%\pi-pocket-gui\config.json`
 
 A value that is not valid falls back to its default, and the settings screen lists it.
+
+### Appearance
+
+**See-through background** lets the desktop show through Pi Pocket's background, blurred; **Opacity** sets how much. Menus, sheets, and cards stay solid, so text stays readable.
+
+- **macOS:** the system's blur (vibrancy). **Blur** picks its material.
+- **Windows 11 (22H2 or newer):** Acrylic or Mica. Windows 10 cannot.
+- **Linux:** turning it on needs a restart (the settings screen offers one). Your compositor does the blur: on Hyprland, `decoration:blur`; on KDE, the Blur effect. GNOME shows it see-through, without blur.
+
+It changes the colors of Pi Pocket's page in this app only, through Pi Pocket's theme colors. If a Pi Pocket release renames them, the page simply stays solid.
 
 ## Develop
 

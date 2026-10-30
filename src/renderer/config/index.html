@@ -20,164 +20,196 @@
 
             <div id="banner" class="banner" role="alert" hidden></div>
 
-            <section class="card connection" aria-labelledby="connection-title">
-                <div class="card-head">
-                    <h2 id="connection-title">Connection</h2>
-                    <span id="status" class="pill" data-state="checking">Checking…</span>
+            <div class="columns">
+                <div class="column">
+                    <section class="card connection" aria-labelledby="connection-title">
+                        <div class="card-head">
+                            <h2 id="connection-title">Connection</h2>
+                            <span id="status" class="pill" data-state="checking">Checking…</span>
+                        </div>
+                        <p id="status-detail" class="muted small"></p>
+
+                        <form id="connect-form" autocomplete="off">
+                            <div class="mode" role="radiogroup" aria-label="How to give the address">
+                                <label><input type="radio" name="mode" value="url" checked /> Address</label>
+                                <label><input type="radio" name="mode" value="parts" /> Host and port</label>
+                            </div>
+
+                            <div id="url-fields" class="fields">
+                                <label class="field wide">
+                                    <span>Server address</span>
+                                    <input id="url" type="text" spellcheck="false" placeholder="http://127.0.0.1:8787" />
+                                </label>
+                            </div>
+
+                            <div id="part-fields" class="fields parts" hidden>
+                                <label class="field">
+                                    <span>Scheme</span>
+                                    <select id="scheme">
+                                        <option value="http">http</option>
+                                        <option value="https">https</option>
+                                    </select>
+                                </label>
+                                <label class="field grow">
+                                    <span>Host</span>
+                                    <input id="host" type="text" spellcheck="false" placeholder="127.0.0.1" />
+                                </label>
+                                <label class="field port">
+                                    <span>Port</span>
+                                    <input id="port" type="text" inputmode="numeric" placeholder="8787" />
+                                </label>
+                                <label class="field grow">
+                                    <span>Path <em class="muted">(optional)</em></span>
+                                    <input id="path" type="text" spellcheck="false" placeholder="/" />
+                                </label>
+                            </div>
+
+                            <p id="url-error" class="error small" hidden></p>
+
+                            <div class="actions">
+                                <button type="button" id="test" class="secondary">Check</button>
+                                <button type="submit" id="connect" class="primary">Connect</button>
+                                <button type="button" id="retry" class="secondary" hidden>Retry now</button>
+                                <span id="retry-note" class="muted small"></span>
+                            </div>
+                        </form>
+                        <p class="muted small">
+                            Sign in inside Pi Pocket after it opens, with your login link or an invite from another device.
+                        </p>
+                    </section>
+
+                    <section class="card get" aria-labelledby="get-title">
+                        <h2 id="get-title">Or get the server yourself</h2>
+                        <p>
+                            This app connects to a Pi Pocket server that already runs. Install one on this computer or on
+                            another one, start it, then put its address above.
+                        </p>
+                        <ol class="steps">
+                            <li>
+                                <span>Install and start it (Node.js 22.19 or newer):</span>
+                                <div class="command">
+                                    <code id="install-command">npm install -g pi-pocket &amp;&amp; pi-pocket</code>
+                                    <button type="button" class="ghost small" data-copy="install-command">Copy</button>
+                                </div>
+                            </li>
+                            <li>
+                                <span>Choose <strong>This device only</strong> in its menu, then use the address it shows
+                                    (<code>http://127.0.0.1:8787</code> by default).</span>
+                            </li>
+                            <li>
+                                <span>Open its login link once in this app to sign in.</span>
+                            </li>
+                        </ol>
+                        <div class="actions">
+                            <button type="button" class="secondary" data-open="github">Pi Pocket on GitHub</button>
+                            <button type="button" class="ghost" data-open="docs">Documentation</button>
+                        </div>
+                    </section>
                 </div>
-                <p id="status-detail" class="muted small"></p>
 
-                <form id="connect-form" autocomplete="off">
-                    <div class="mode" role="radiogroup" aria-label="How to give the address">
-                        <label><input type="radio" name="mode" value="url" checked /> Address</label>
-                        <label><input type="radio" name="mode" value="parts" /> Host and port</label>
+                <form id="settings-form" class="settings" autocomplete="off">
+                    <details class="card" open>
+                        <summary><h2>Window</h2></summary>
+                        <div class="rows">
+                            <label class="row"><span><strong>Close to tray</strong><small id="tray-note">Closing the window keeps the app running in the tray, so notifications keep coming.</small></span><input type="checkbox" data-key="window.closeToTray" /></label>
+                            <label class="row"><span><strong>Launch at login</strong><small>Start the app when you sign in to this computer.</small></span><input type="checkbox" data-key="window.launchAtLogin" /></label>
+                            <label class="row"><span><strong>Start hidden</strong><small>When started at login, stay in the tray.</small></span><input type="checkbox" data-key="window.startHidden" /></label>
+                            <label class="row"><span><strong>Show the menu bar</strong><small>Otherwise Alt shows it.</small></span><input type="checkbox" data-key="window.showMenuBar" /></label>
+                            <label class="row"><span><strong>Global shortcut</strong><small>Show or hide the window from anywhere.</small></span><input type="checkbox" data-key="window.hotkeyEnabled" /></label>
+                            <label class="row"><span><strong>Shortcut</strong><small>For example CommandOrControl+Shift+P.</small></span><input type="text" data-key="window.hotkey" class="short" spellcheck="false" /></label>
+                            <label class="row"><span><strong>Pi Pocket's links to new windows</strong><small>Its own pages, such as an artifact opened in a tab.</small></span>
+                                <select data-key="window.sameOriginLinks">
+                                    <option value="appWindow">Open in a window of this app</option>
+                                    <option value="browser">Open in the system browser</option>
+                                </select>
+                            </label>
+                        </div>
+                    </details>
+
+                    <details class="card" id="appearance-card">
+                        <summary><h2>Appearance</h2></summary>
+                        <div class="rows">
+                            <label class="row"><span><strong>See-through background</strong><small id="translucent-note">The desktop shows through Pi Pocket's background, blurred.</small></span><input type="checkbox" data-key="appearance.translucent" /></label>
+                            <div class="row" id="translucent-restart" hidden>
+                                <span><strong>Restart to apply</strong><small>On Linux, a window turns see-through only when it opens.</small></span>
+                                <button type="button" id="relaunch" class="secondary">Restart now</button>
+                            </div>
+                            <label class="row"><span><strong>Opacity</strong><small>How solid the background stays. Menus, sheets, and cards stay solid.</small></span>
+                                <span class="range"><input type="range" data-key="appearance.opacity" min="40" max="100" step="1" /><output id="opacity-value"></output></span>
+                            </label>
+                            <label class="row" data-platform="darwin"><span><strong>Blur</strong><small>macOS's material under the window.</small></span>
+                                <select data-key="appearance.macMaterial">
+                                    <option value="under-window">Window (default)</option>
+                                    <option value="sidebar">Sidebar</option>
+                                    <option value="hud">Dark glass (HUD)</option>
+                                    <option value="fullscreen-ui">Full-screen UI</option>
+                                </select>
+                            </label>
+                            <label class="row" data-platform="win32"><span><strong>Blur</strong><small>Acrylic blurs what is behind the window; Mica tints it with the wallpaper.</small></span>
+                                <select data-key="appearance.windowsMaterial">
+                                    <option value="acrylic">Acrylic</option>
+                                    <option value="mica">Mica</option>
+                                </select>
+                            </label>
+                        </div>
+                    </details>
+
+                    <details class="card">
+                        <summary><h2>Notifications</h2></summary>
+                        <div class="rows">
+                            <label class="row"><span><strong>Notifications</strong><small>While the app runs, also hidden in the tray. Needs a server with desktop support.</small></span><input type="checkbox" data-key="notifications.enabled" /></label>
+                            <label class="row"><span><strong>Sound</strong></span><input type="checkbox" data-key="notifications.sound" /></label>
+                            <label class="row"><span><strong>Allow from a notification</strong><small>Deny is always offered. A cut-off command could hide what it does.</small></span>
+                                <select data-key="notifications.allowFromNotification">
+                                    <option value="whenFullyShown">Only when the whole call shows</option>
+                                    <option value="always">Always</option>
+                                    <option value="never">Never: approve in the app</option>
+                                </select>
+                            </label>
+                            <label class="row"><span><strong>Longest call shown</strong><small>Characters; longer calls are cut.</small></span><input type="number" data-key="notifications.maxCallLength" class="short" min="20" max="2000" /></label>
+                        </div>
+                    </details>
+
+                    <details class="card">
+                        <summary><h2>Connection</h2></summary>
+                        <div class="rows">
+                            <label class="row"><span><strong>Open the server at start</strong><small>When it answers. Otherwise this screen shows first.</small></span><input type="checkbox" data-key="connection.autoConnect" /></label>
+                            <label class="row"><span><strong>Check timeout</strong><small>Milliseconds.</small></span><input type="number" data-key="connection.probeTimeoutMs" class="short" min="500" max="60000" /></label>
+                            <label class="row"><span><strong>Longest wait between tries</strong><small>Seconds, while the server does not answer.</small></span><input type="number" data-key="connection.retryMaxSeconds" class="short" min="2" max="3600" /></label>
+                            <label class="row"><span><strong>Check while connected</strong><small>Every so many seconds; 0 turns it off.</small></span><input type="number" data-key="connection.healthIntervalSeconds" class="short" min="0" max="3600" /></label>
+                            <label class="row"><span><strong>Failed checks before an outage</strong></span><input type="number" data-key="connection.failuresBeforeOutage" class="short" min="1" max="100" /></label>
+                            <label class="row stack"><span><strong>Other allowed origins</strong><small>One per line. Pages the window may show besides the server, such as a sign-in page in front of it (Cloudflare Access).</small></span><textarea data-key="server.extraOrigins" rows="2" spellcheck="false" placeholder="https://myteam.cloudflareaccess.com"></textarea></label>
+                        </div>
+                    </details>
+
+                    <details class="card">
+                        <summary><h2>Updates</h2></summary>
+                        <div class="rows">
+                            <label class="row"><span><strong>Look for new versions of this app</strong><small>Pi Pocket itself updates on its server.</small></span><input type="checkbox" data-key="updates.check" /></label>
+                            <label class="row"><span><strong>How often</strong><small>Hours.</small></span><input type="number" data-key="updates.intervalHours" class="short" min="1" max="720" /></label>
+                            <div class="row">
+                                <span><strong id="update-status">Not checked yet</strong><small id="update-detail"></small></span>
+                                <span class="buttons">
+                                    <button type="button" id="update-action" hidden></button>
+                                    <button type="button" id="update-check" class="secondary">Check now</button>
+                                </span>
+                            </div>
+                        </div>
+                    </details>
+
+                    <div id="problems" class="card problems" hidden>
+                        <h2>Problems in config.json</h2>
+                        <p class="muted small">These values were not valid, so their defaults are used.</p>
+                        <ul id="problem-list"></ul>
                     </div>
 
-                    <div id="url-fields" class="fields">
-                        <label class="field wide">
-                            <span>Server address</span>
-                            <input id="url" type="text" spellcheck="false" placeholder="http://127.0.0.1:8787" />
-                        </label>
-                    </div>
-
-                    <div id="part-fields" class="fields parts" hidden>
-                        <label class="field">
-                            <span>Scheme</span>
-                            <select id="scheme">
-                                <option value="http">http</option>
-                                <option value="https">https</option>
-                            </select>
-                        </label>
-                        <label class="field grow">
-                            <span>Host</span>
-                            <input id="host" type="text" spellcheck="false" placeholder="127.0.0.1" />
-                        </label>
-                        <label class="field port">
-                            <span>Port</span>
-                            <input id="port" type="text" inputmode="numeric" placeholder="8787" />
-                        </label>
-                        <label class="field grow">
-                            <span>Path <em class="muted">(optional)</em></span>
-                            <input id="path" type="text" spellcheck="false" placeholder="/" />
-                        </label>
-                    </div>
-
-                    <p id="url-error" class="error small" hidden></p>
-
-                    <div class="actions">
-                        <button type="button" id="test" class="secondary">Check</button>
-                        <button type="submit" id="connect" class="primary">Connect</button>
-                        <button type="button" id="retry" class="secondary" hidden>Retry now</button>
-                        <span id="retry-note" class="muted small"></span>
+                    <div class="footer">
+                        <span class="muted small">Settings file: <code id="config-path"></code></span>
+                        <button type="button" id="show-file" class="ghost small">Show file</button>
+                        <span id="saved" class="muted small" aria-live="polite"></span>
                     </div>
                 </form>
-                <p class="muted small">
-                    Sign in inside Pi Pocket after it opens, with your login link or an invite from another device.
-                </p>
-            </section>
-
-            <section class="card get" aria-labelledby="get-title">
-                <h2 id="get-title">Or get the server yourself</h2>
-                <p>
-                    This app connects to a Pi Pocket server that already runs. Install one on this computer or on
-                    another one, start it, then put its address above.
-                </p>
-                <ol class="steps">
-                    <li>
-                        <span>Install and start it (Node.js 22.19 or newer):</span>
-                        <div class="command">
-                            <code id="install-command">npm install -g pi-pocket &amp;&amp; pi-pocket</code>
-                            <button type="button" class="ghost small" data-copy="install-command">Copy</button>
-                        </div>
-                    </li>
-                    <li>
-                        <span>Choose <strong>This device only</strong> in its menu, then use the address it shows
-                            (<code>http://127.0.0.1:8787</code> by default).</span>
-                    </li>
-                    <li>
-                        <span>Open its login link once in this app to sign in.</span>
-                    </li>
-                </ol>
-                <div class="actions">
-                    <button type="button" class="secondary" data-open="github">Pi Pocket on GitHub</button>
-                    <button type="button" class="ghost" data-open="docs">Documentation</button>
-                </div>
-            </section>
-
-            <form id="settings-form" class="settings" autocomplete="off">
-                <details class="card" open>
-                    <summary><h2>Window</h2></summary>
-                    <div class="rows">
-                        <label class="row"><span><strong>Close to tray</strong><small id="tray-note">Closing the window keeps the app running in the tray, so notifications keep coming.</small></span><input type="checkbox" data-key="window.closeToTray" /></label>
-                        <label class="row"><span><strong>Launch at login</strong><small>Start the app when you sign in to this computer.</small></span><input type="checkbox" data-key="window.launchAtLogin" /></label>
-                        <label class="row"><span><strong>Start hidden</strong><small>When started at login, stay in the tray.</small></span><input type="checkbox" data-key="window.startHidden" /></label>
-                        <label class="row"><span><strong>Show the menu bar</strong><small>Otherwise Alt shows it.</small></span><input type="checkbox" data-key="window.showMenuBar" /></label>
-                        <label class="row"><span><strong>Global shortcut</strong><small>Show or hide the window from anywhere.</small></span><input type="checkbox" data-key="window.hotkeyEnabled" /></label>
-                        <label class="row"><span><strong>Shortcut</strong><small>For example CommandOrControl+Shift+P.</small></span><input type="text" data-key="window.hotkey" class="short" spellcheck="false" /></label>
-                        <label class="row"><span><strong>Pi Pocket's links to new windows</strong><small>Its own pages, such as an artifact opened in a tab.</small></span>
-                            <select data-key="window.sameOriginLinks">
-                                <option value="appWindow">Open in a window of this app</option>
-                                <option value="browser">Open in the system browser</option>
-                            </select>
-                        </label>
-                    </div>
-                </details>
-
-                <details class="card">
-                    <summary><h2>Notifications</h2></summary>
-                    <div class="rows">
-                        <label class="row"><span><strong>Notifications</strong><small>While the app runs, also hidden in the tray. Needs a server with desktop support.</small></span><input type="checkbox" data-key="notifications.enabled" /></label>
-                        <label class="row"><span><strong>Sound</strong></span><input type="checkbox" data-key="notifications.sound" /></label>
-                        <label class="row"><span><strong>Allow from a notification</strong><small>Deny is always offered. A cut-off command could hide what it does.</small></span>
-                            <select data-key="notifications.allowFromNotification">
-                                <option value="whenFullyShown">Only when the whole call shows</option>
-                                <option value="always">Always</option>
-                                <option value="never">Never: approve in the app</option>
-                            </select>
-                        </label>
-                        <label class="row"><span><strong>Longest call shown</strong><small>Characters; longer calls are cut.</small></span><input type="number" data-key="notifications.maxCallLength" class="short" min="20" max="2000" /></label>
-                    </div>
-                </details>
-
-                <details class="card">
-                    <summary><h2>Connection</h2></summary>
-                    <div class="rows">
-                        <label class="row"><span><strong>Open the server at start</strong><small>When it answers. Otherwise this screen shows first.</small></span><input type="checkbox" data-key="connection.autoConnect" /></label>
-                        <label class="row"><span><strong>Check timeout</strong><small>Milliseconds.</small></span><input type="number" data-key="connection.probeTimeoutMs" class="short" min="500" max="60000" /></label>
-                        <label class="row"><span><strong>Longest wait between tries</strong><small>Seconds, while the server does not answer.</small></span><input type="number" data-key="connection.retryMaxSeconds" class="short" min="2" max="3600" /></label>
-                        <label class="row"><span><strong>Check while connected</strong><small>Every so many seconds; 0 turns it off.</small></span><input type="number" data-key="connection.healthIntervalSeconds" class="short" min="0" max="3600" /></label>
-                        <label class="row"><span><strong>Failed checks before an outage</strong></span><input type="number" data-key="connection.failuresBeforeOutage" class="short" min="1" max="100" /></label>
-                        <label class="row stack"><span><strong>Other allowed origins</strong><small>One per line. Pages the window may show besides the server, such as a sign-in page in front of it (Cloudflare Access).</small></span><textarea data-key="server.extraOrigins" rows="2" spellcheck="false" placeholder="https://myteam.cloudflareaccess.com"></textarea></label>
-                    </div>
-                </details>
-
-                <details class="card">
-                    <summary><h2>Updates</h2></summary>
-                    <div class="rows">
-                        <label class="row"><span><strong>Look for new versions of this app</strong><small>Pi Pocket itself updates on its server.</small></span><input type="checkbox" data-key="updates.check" /></label>
-                        <label class="row"><span><strong>How often</strong><small>Hours.</small></span><input type="number" data-key="updates.intervalHours" class="short" min="1" max="720" /></label>
-                        <div class="row">
-                            <span><strong id="update-status">Not checked yet</strong><small id="update-detail"></small></span>
-                            <span class="buttons">
-                                <button type="button" id="update-action" hidden></button>
-                                <button type="button" id="update-check" class="secondary">Check now</button>
-                            </span>
-                        </div>
-                    </div>
-                </details>
-
-                <div id="problems" class="card problems" hidden>
-                    <h2>Problems in config.json</h2>
-                    <p class="muted small">These values were not valid, so their defaults are used.</p>
-                    <ul id="problem-list"></ul>
-                </div>
-
-                <div class="footer">
-                    <span class="muted small">Settings file: <code id="config-path"></code></span>
-                    <button type="button" id="show-file" class="ghost small">Show file</button>
-                    <span id="saved" class="muted small" aria-live="polite"></span>
-                </div>
-            </form>
+            </div>
         </main>
     </body>
 </html>

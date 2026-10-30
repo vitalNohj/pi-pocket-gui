@@ -9,6 +9,19 @@ export type AllowFromNotification = "whenFullyShown" | "always" | "never";
 /** Where a link to the server's own pages that asks for a new window opens: a plain window of this app (signed in), or the system browser. */
 export type SameOriginLinks = "appWindow" | "browser";
 
+/** The blur macOS draws under a see-through window (Electron's vibrancy types). */
+export type MacMaterial = "under-window" | "sidebar" | "hud" | "fullscreen-ui";
+
+/** The blur Windows 11 draws under a see-through window. */
+export type WindowsMaterial = "acrylic" | "mica";
+
+/** Whether this desktop can make the window see-through now, and what it blurs with. */
+export type TranslucencySupport =
+    | { kind: "live"; blur: "system" | "compositor" }
+    /** Linux: a window is see-through only when made so, so turning it on needs a restart. */
+    | { kind: "restart" }
+    | { kind: "unsupported"; message: string };
+
 /** Every setting, as stored in config.json. */
 export interface Settings {
     server: {
@@ -56,6 +69,14 @@ export interface Settings {
         /** Look for new versions of this app. Pi Pocket itself updates on the server. */
         check: boolean;
         intervalHours: number;
+    };
+    appearance: {
+        /** A see-through window, blurred where the desktop can: the page's grounds let the desktop show. */
+        translucent: boolean;
+        /** How solid the page's grounds stay, in percent: 100 hides the desktop, 40 shows it most. */
+        opacity: number;
+        macMaterial: MacMaterial;
+        windowsMaterial: WindowsMaterial;
     };
 }
 
@@ -111,6 +132,9 @@ export interface ConfigState {
     canReturn: boolean;
     /** The desktop has a tray. Without one, close minimizes. */
     trayAvailable: boolean;
+    translucency: TranslucencySupport;
+    /** Linux: the window was made see-through at start (turning it on takes a restart; off works at once). */
+    translucentAtStart: boolean;
     platform: string;
     appVersion: string;
 }
@@ -176,5 +200,7 @@ export interface GuiConfigApi {
     checkUpdates(): Promise<void>;
     /** The next step of an update found: download it, install it, or open its page. */
     updateAction(): Promise<void>;
+    /** Quits and starts the app again (a setting that needs a new window). */
+    relaunch(): Promise<void>;
     onState(listener: (state: ConfigState) => void): () => void;
 }

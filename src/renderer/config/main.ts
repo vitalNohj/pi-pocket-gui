@@ -371,6 +371,8 @@ function renderSettings(next: ConfigState): void {
         }
     }
 
+    renderAppearance(next);
+
     element("tray-note").textContent = next.trayAvailable
         ? "Closing the window keeps the app running in the tray, so notifications keep coming."
         : "This desktop shows no tray icons (on GNOME, the AppIndicator extension adds them), so closing minimizes instead.";
@@ -402,7 +404,7 @@ function collect(): Settings {
 
         if (input instanceof HTMLInputElement && input.type === "checkbox") {
             value = input.checked;
-        } else if (input instanceof HTMLInputElement && input.type === "number") {
+        } else if (input instanceof HTMLInputElement && (input.type === "number" || input.type === "range")) {
             value = input.value === "" ? Number.NaN : Number(input.value);
         } else if (input instanceof HTMLTextAreaElement) {
             value = input.value
@@ -436,9 +438,65 @@ function scheduleSave(): void {
     }, 300);
 }
 
+/** The Appearance card: what this desktop can do, and the config screen itself see-through like the server's page. */
+function renderAppearance(next: ConfigState): void {
+    const appearance = next.settings.appearance;
+    const support = next.translucency;
+    const toggle = document.querySelector<HTMLInputElement>('[data-key="appearance.translucent"]')!;
+    const note = element("translucent-note");
+
+    for (const row of document.querySelectorAll<HTMLElement>("[data-platform]")) {
+        row.hidden = row.dataset.platform !== next.platform;
+    }
+
+    if (support.kind === "unsupported") {
+        note.textContent = support.message;
+        toggle.disabled = true;
+    } else {
+        toggle.disabled = false;
+        note.textContent =
+            next.platform === "linux"
+                ? "The desktop shows through Pi Pocket's background. Your compositor blurs it if set to (Hyprland's decoration:blur, KDE's Blur effect); GNOME shows it unblurred."
+                : "The desktop shows through Pi Pocket's background, blurred.";
+    }
+
+    // Linux: on takes a new window; off works now, but the window stays see-through-capable until a restart.
+    element("translucent-restart").hidden = !(next.platform === "linux" && appearance.translucent !== next.translucentAtStart);
+
+    const live = appearance.translucent && support.kind === "live";
+
+    for (const row of element("appearance-card").querySelectorAll<HTMLElement>(".row")) {
+        if (row.contains(toggle) || row.id === "translucent-restart") {
+            continue;
+        }
+
+        row.classList.toggle("off", !appearance.translucent);
+    }
+
+    showOpacity(appearance.opacity);
+    document.documentElement.dataset.translucent = live ? "on" : "off";
+}
+
+function showOpacity(value: number): void {
+    element("opacity-value").textContent = `${String(value)}%`;
+    document.documentElement.style.setProperty("--opacity", `${String(value)}%`);
+}
+
 for (const input of settingInputs) {
     input.addEventListener("change", scheduleSave);
 }
+
+// The opacity follows the slider as it moves; the save waits for the slider to settle.
+const opacity = document.querySelector<HTMLInputElement>('[data-key="appearance.opacity"]')!;
+
+opacity.addEventListener("input", () => {
+    showOpacity(Number(opacity.value));
+    scheduleSave();
+});
+
+element("relaunch").addEventListener("click", () => {
+    void gui.relaunch();
+});
 
 element<HTMLFormElement>("settings-form").addEventListener("submit", (event) => {
     event.preventDefault();

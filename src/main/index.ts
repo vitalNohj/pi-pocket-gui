@@ -23,6 +23,7 @@ import {
 import type { ConfigReason, ConfigState, ProbeResult, Settings, SettingsProblem } from "../shared/types";
 import { retryDelayMs } from "./backoff";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
+import { SOLID, setUpAppearance } from "./appearance";
 import { setUpDesktop } from "./desktop";
 import { setUpUpdates } from "./updates";
 import { setLaunchAtLogin, startedAtLogin, trayAvailable } from "./platform";
@@ -84,6 +85,10 @@ interface Gui {
     desktop: ReturnType<typeof setUpDesktop> | undefined;
     /** The app's own updates (src/main/updates.ts). */
     updates: ReturnType<typeof setUpUpdates> | undefined;
+    /** The see-through window (src/main/appearance.ts). */
+    appearance: ReturnType<typeof setUpAppearance> | undefined;
+    /** Linux: the window was made see-through at start; turning that on needs a new window. */
+    translucentAtStart: boolean;
     /** The notice about a server without the bridge was shown in this run. */
     toldNoBridge: boolean;
 }
@@ -98,6 +103,8 @@ async function start(): Promise<void> {
     const loaded = loadSettings(configPath);
     const statePath = join(app.getPath("userData"), "window-state.json");
     const placed = loadWindowState(statePath);
+    // Linux makes a window see-through only when it is made; macOS and Windows change it at any time.
+    const translucentAtStart = process.platform === "linux" && loaded.settings.appearance.translucent;
 
     const window = new BaseWindow({
         title: "Pi Pocket",
@@ -107,7 +114,8 @@ async function start(): Promise<void> {
         minWidth: 360,
         minHeight: 480,
         show: false,
-        backgroundColor: "#1a1b26",
+        backgroundColor: SOLID,
+        ...(translucentAtStart ? { transparent: true } : {}),
         icon: join(ASSETS, "icon-512.png"),
         autoHideMenuBar: !loaded.settings.window.showMenuBar,
     });
@@ -146,8 +154,8 @@ async function start(): Promise<void> {
         },
     });
 
-    server.setBackgroundColor("#1a1b26");
-    config.setBackgroundColor("#1a1b26");
+    server.setBackgroundColor(SOLID);
+    config.setBackgroundColor(SOLID);
     window.contentView.addChildView(server);
     window.contentView.addChildView(config);
 
@@ -172,8 +180,20 @@ async function start(): Promise<void> {
         quitting: false,
         desktop: undefined,
         updates: undefined,
+        appearance: undefined,
+        translucentAtStart,
         toldNoBridge: false,
     };
+
+    gui.appearance = setUpAppearance({
+        platform: process.platform,
+        systemVersion: process.getSystemVersion(),
+        window,
+        views: [server, config],
+        server: server.webContents,
+        onServerOrigin: () => originOf(server.webContents.getURL()) === currentOrigin(),
+        translucentAtStart,
+    });
 
     gui.updates = setUpUpdates({
         assets: ASSETS,
@@ -392,6 +412,8 @@ function configState(): ConfigState {
         ...(state.retry === undefined ? {} : { nextRetryAt: state.retry.at }),
         canReturn: state.loadedUrl !== undefined && state.reason.kind === "user",
         trayAvailable: state.trayAvailable,
+        translucency: state.appearance?.support() ?? { kind: "unsupported", message: "" },
+        translucentAtStart: state.translucentAtStart,
         platform: process.platform,
         appVersion: app.getVersion(),
         update: state.updates?.state() ?? { method: "source", status: "idle" },
@@ -528,6 +550,11 @@ function watchServerView(): void {
 
     contents.on("did-finish-load", () => {
         tellNoBridge();
+    });
+
+    // Each document starts without the see-through CSS: give it again as soon as there is a page to give it to.
+    contents.on("dom-ready", () => {
+        gui?.appearance?.pageLoaded();
     });
 }
 
@@ -763,6 +790,7 @@ function applyDesktopSettings(before: Settings | undefined): void {
         state.tray = createTray();
     }
 
+    state.appearance?.apply(settings);
     state.desktop?.refreshTray();
 }
 
@@ -772,7 +800,12 @@ function createTray(): Tray {
     const tray = new Tray(image);
 
     tray.setToolTip("Pi Pocket");
-    tray.on("click", toggleWindow);
+
+    // On macOS a menu-bar icon only opens its menu, as every other one there does; "Open Pi Pocket" in it shows the
+    // window. Elsewhere a click on the tray icon shows or hides the window, and right-click opens the menu.
+    if (process.platform !== "darwin") {
+        tray.on("click", toggleWindow);
+    }
 
     return tray;
 }
@@ -957,6 +990,12 @@ function registerIpc(): void {
     handle("config:check-updates", () => gui!.updates?.check(true));
 
     handle("config:update-action", () => gui!.updates?.act());
+
+    handle("config:relaunch", () => {
+        gui!.quitting = true;
+        app.relaunch();
+        app.quit();
+    });
 
     handle("config:show-file", () => {
         const state = gui!;

@@ -35,6 +35,7 @@ export function defaultSettings(): Settings {
             maxCallLength: 120,
         },
         updates: { check: true, intervalHours: 6 },
+        appearance: { translucent: false, opacity: 82, macMaterial: "under-window", windowsMaterial: "acrylic" },
     };
 }
 
@@ -131,6 +132,12 @@ const schema: { [S in keyof Settings]: { [K in keyof Settings[S]]: Check<Setting
         maxCallLength: int(20, 2000),
     },
     updates: { check: bool, intervalHours: int(1, 24 * 30) },
+    appearance: {
+        translucent: bool,
+        opacity: int(40, 100),
+        macMaterial: oneOf("under-window", "sidebar", "hud", "fullscreen-ui"),
+        windowsMaterial: oneOf("acrylic", "mica"),
+    },
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {

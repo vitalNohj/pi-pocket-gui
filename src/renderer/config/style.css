@@ -53,17 +53,55 @@
 html,
 body {
     margin: 0;
-    background: var(--desk);
     color: var(--body);
     font: 15px/1.5 var(--sans);
 }
 
+html {
+    background: var(--desk);
+}
+
+/* A see-through window (Appearance): the desk and the cards let the desktop through, by the opacity chosen. */
+:root[data-translucent="on"] {
+    --desk: color-mix(in srgb, var(--o-bg-darker) calc(var(--opacity) - 35%), transparent);
+    --ground: color-mix(in srgb, var(--bg) var(--opacity), transparent);
+}
+
 .page {
-    max-width: 760px;
+    max-width: 1320px;
     margin: 0 auto;
-    padding: 32px 20px 48px;
+    padding: 32px 24px 48px;
     display: grid;
     gap: 16px;
+}
+
+/* One column on narrow windows; from 1000 px the connection on the left and the settings on the right. */
+.columns {
+    display: grid;
+    gap: 16px;
+    align-items: start;
+}
+
+.column {
+    display: grid;
+    gap: 16px;
+}
+
+@media (min-width: 1000px) {
+    .columns {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .column {
+        position: sticky;
+        top: 16px;
+    }
+}
+
+/* The address form: its parts apart, so the field's focus ring never touches the buttons under it. */
+#connect-form {
+    display: grid;
+    gap: 14px;
 }
 
 h1,
@@ -118,7 +156,7 @@ code {
 }
 
 .card {
-    background: var(--bg);
+    background: var(--ground, var(--bg));
     border: 1px solid var(--hair);
     border-radius: var(--radius);
     padding: 18px 20px;
@@ -197,7 +235,7 @@ code {
 
 .field {
     display: grid;
-    gap: 4px;
+    gap: 6px;
     font-size: 13px;
     color: var(--muted);
 }
@@ -246,6 +284,13 @@ summary:focus-visible {
 input.short,
 select.short {
     width: 130px;
+    flex: none;
+}
+
+/* Room for a whole shortcut, such as CommandOrControl+Shift+P. */
+input[type="text"].short {
+    width: min(290px, 45vw);
+    font-size: 13px;
 }
 
 .row select {
@@ -474,4 +519,27 @@ input[type="checkbox"]:checked::after {
     gap: 8px;
     justify-content: flex-end;
     flex-shrink: 0;
+}
+
+.row > .range {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+}
+
+input[type="range"] {
+    width: 170px;
+    accent-color: var(--accent);
+}
+
+.range output {
+    font: 13px var(--mono);
+    color: var(--text);
+    min-width: 4ch;
+    text-align: right;
+}
+
+.row.off {
+    opacity: 0.5;
 }
