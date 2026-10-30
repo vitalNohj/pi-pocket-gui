@@ -27,7 +27,7 @@ test("appearance is off by default, and its values are checked", () => {
     assert.equal(defaultSettings().appearance.translucent, false);
 
     const { settings, problems } = validateSettings({
-        appearance: { translucent: true, opacity: 10, macMaterial: "hud", windowsMaterial: "glass" },
+        appearance: { translucent: true, opacity: 150, macMaterial: "hud", windowsMaterial: "glass" },
     });
 
     assert.equal(settings.appearance.translucent, true);

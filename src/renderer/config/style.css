@@ -77,7 +77,7 @@ html {
 
 /* A see-through window (Appearance): the desk and the cards let the desktop through, by the opacity chosen. */
 :root[data-translucent="on"] {
-    --page-ground: color-mix(in srgb, var(--desk) calc(var(--opacity) - 35%), transparent);
+    --page-ground: color-mix(in srgb, var(--desk) max(0%, calc(var(--opacity) - 35%)), transparent);
     --ground: color-mix(in srgb, var(--bg) var(--opacity), transparent);
 }
 

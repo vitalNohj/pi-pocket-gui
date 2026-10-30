@@ -136,7 +136,7 @@ const schema: { [S in keyof Settings]: { [K in keyof Settings[S]]: Check<Setting
     updates: { check: bool, intervalHours: int(1, 24 * 30) },
     appearance: {
         translucent: bool,
-        opacity: int(40, 100),
+        opacity: int(0, 100),
         macMaterial: oneOf("under-window", "sidebar", "hud", "fullscreen-ui"),
         windowsMaterial: oneOf("acrylic", "mica"),
     },
