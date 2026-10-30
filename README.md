@@ -40,7 +40,7 @@ A value that is not valid falls back to its default, and the settings screen lis
 
 ### Title bar
 
-Seamless by default: the window has no title bar of its own. Pi Pocket runs to the top edge, and the window's buttons sit over it (macOS's traffic lights; on Windows and Linux, the minimize, maximize, and close buttons). Drag the window by the strip along its top edge. The app tells the page the buttons are there as a phone tells a page of its notch (a top safe-area inset), so Pi Pocket's own bars make room for them in its own colors; nothing in Pi Pocket is specific to this app. On Windows and Linux the seamless window has no menu bar, but its keys still work (Ctrl+, opens Server settings). Settings → Window → Title bar → **The system's** brings the system's title bar back, after a restart.
+Seamless by default: the window has no title bar of its own. Pi Pocket runs to the top edge, and the window's buttons sit over it (macOS's traffic lights, close to the corner; on Windows and Linux, the minimize, maximize, and close buttons). The app tells the page where they are through the Window Controls Overlay, the web's standard for it, and Pi Pocket makes room only under them: on macOS the sidebar starts a little lower, and the conversation keeps its whole height. Drag the window by the bar or strip beside the buttons. An older Pi Pocket, without that, gets a band along the whole top, just as tall as the buttons. On Windows and Linux the seamless window has no menu bar, but its keys still work (Ctrl+, opens Server settings). Settings → Window → Title bar → **The system's** brings the system's title bar back, after a restart.
 
 ### Appearance
 

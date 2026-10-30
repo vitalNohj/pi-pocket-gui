@@ -84,8 +84,8 @@ html {
 .page {
     max-width: 1320px;
     margin: 0 auto;
-    /* The window's controls sit in the inset, over the window's top edge (src/main/titlebar.ts). */
-    padding: calc(max(32px, env(safe-area-inset-top, 0px) + 12px)) 24px 48px;
+    /* The window's controls sit over the top edge (src/main/titlebar.ts): the page starts below them. */
+    padding: calc(max(32px, env(titlebar-area-height, 0px) + 12px)) 24px 48px;
     display: grid;
     gap: 16px;
 }
@@ -109,7 +109,7 @@ html {
 
     .column {
         position: sticky;
-        top: calc(16px + env(safe-area-inset-top, 0px));
+        top: calc(max(16px, env(titlebar-area-height, 0px) + 8px));
     }
 }
 
@@ -582,7 +582,7 @@ input[type="range"] {
     top: 0;
     left: 0;
     right: 0;
-    height: env(safe-area-inset-top, 0px);
+    height: env(titlebar-area-height, 0px);
     app-region: drag;
     z-index: 10;
 }

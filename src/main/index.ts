@@ -206,7 +206,6 @@ async function start(): Promise<void> {
         platform: process.platform,
         style: titleBarAtStart,
         window,
-        views: [server.webContents, config.webContents],
         server: server.webContents,
     });
 
@@ -393,10 +392,9 @@ function layout(): void {
     const { width, height } = gui.window.getContentBounds();
     // Below the title bar's strip only when the page could not be told to keep clear of it (src/main/titlebar.ts).
     const top = gui.titleBar?.offset() ?? 0;
-    const bounds = { x: 0, y: top, width, height: Math.max(0, height - top) };
 
-    gui.server.setBounds(bounds);
-    gui.config.setBounds(bounds);
+    gui.server.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) });
+    gui.config.setBounds({ x: 0, y: 0, width, height });
 }
 
 function show(which: "server" | "config"): void {

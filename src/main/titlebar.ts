@@ -1,21 +1,30 @@
 /**
  * The seamless title bar: no bar of its own, Pi Pocket's page up to the window's top edge, and the window's controls
- * over it (macOS's traffic lights; on Windows and Linux, Electron's Window Controls Overlay).
+ * over it (macOS's traffic lights; on Windows and Linux, the minimize, maximize, and close buttons).
  *
- * The page learns of the controls as a phone's page learns of its notch: a top safe-area inset
- * (env(safe-area-inset-top)), set through the DevTools protocol (Emulation.setSafeAreaInsetsOverride). Pi Pocket
- * already pads its top bar, rail, and sheets by that inset for phones, so its own surfaces, in its own colors, fill the
- * strip behind the controls. Nothing here knows Pi Pocket's markup: the only CSS added is a see-through strip of that
- * height to drag the window by.
+ * The page learns where the controls are through the Window Controls Overlay, the web's standard for it
+ * (navigator.windowControlsOverlay, env(titlebar-area-*)), on every platform. A Pi Pocket that knows it
+ * (web/window-controls.js there) makes room only under the controls: the window under them, by as much as they take.
+ * It says so on its root (data-window-controls), and then the page gets nothing more.
+ *
+ * A page that does not (an older Pi Pocket, a sign-in page in front of the server) is told of a band as a phone's page
+ * is told of its notch: a top safe-area inset, set through the DevTools protocol (Emulation.setSafeAreaInsetsOverride).
+ * Pi Pocket has long padded its bars by that inset, so its surfaces fill the band in its own colors; the only CSS added
+ * is a see-through strip of that height to drag the window by.
  */
 import type { BaseWindow, BaseWindowConstructorOptions, WebContents } from "electron";
 import type { ThemeColors, TitleBarStyle } from "../shared/types";
 
-/** The strip's height, in CSS pixels: room for the controls, centered in it. */
-export const BAND = 36;
+/** Where macOS's traffic lights sit: close to the corner, so the band they need is short (their 14 px, and 7 on each side). */
+export const TRAFFIC_LIGHTS = { x: 12, y: 7 };
 
-/** Where macOS's traffic lights sit in the strip: about 14 px tall, so centered at its middle. */
-const TRAFFIC_LIGHTS = { x: 16, y: 11 };
+/** The controls' height on Windows and Linux, in CSS pixels: as short as they stay easy to hit. */
+export const OVERLAY_HEIGHT = 32;
+
+/** The band a page that makes no room of its own is told of: the controls' height. */
+export function bandHeight(platform: string): number {
+    return platform === "darwin" ? 14 + 2 * TRAFFIC_LIGHTS.y : OVERLAY_HEIGHT;
+}
 
 /** The window's options for its title bar, fixed when the window is made. */
 export function titleBarOptions(
@@ -28,7 +37,8 @@ export function titleBarOptions(
     }
 
     if (platform === "darwin") {
-        return { titleBarStyle: "hidden", trafficLightPosition: TRAFFIC_LIGHTS };
+        // The overlay itself: macOS draws the traffic lights; Electron tells the page where they are.
+        return { titleBarStyle: "hidden", trafficLightPosition: TRAFFIC_LIGHTS, titleBarOverlay: true };
     }
 
     return { titleBarStyle: "hidden", titleBarOverlay: overlayColors(theme) };
@@ -36,12 +46,12 @@ export function titleBarOptions(
 
 /** Windows and Linux: the controls draw on the page's own ground (see-through), their symbols in its text color. */
 export function overlayColors(theme: ThemeColors): { color: string; symbolColor: string; height: number } {
-    return { color: "#00000000", symbolColor: theme.colors.text, height: BAND };
+    return { color: "#00000000", symbolColor: theme.colors.text, height: OVERLAY_HEIGHT };
 }
 
 /**
- * The strip to drag the window by: as tall as the inset, so it goes with it (0 in full screen). Over everything, at
- * the top edge only, where the page has nothing of its own but the inset's padding.
+ * For a page that makes no room of its own: the strip to drag the window by, as tall as the band it is told of (0
+ * when it is told of none). Over everything, at the top edge only, where such a page has only the band's padding.
  */
 export const DRAG_CSS = `:root::after {
     content: "";
@@ -55,18 +65,19 @@ export const DRAG_CSS = `:root::after {
     z-index: 2147483647;
 }`;
 
+/** Whether the page makes room for the controls itself: Pi Pocket's web/window-controls.js marks its root. */
+const OWN_ROOM = `document.documentElement.hasAttribute("data-window-controls")`;
+
 export interface TitleBarHost {
     platform: string;
     style: TitleBarStyle;
     window: BaseWindow;
-    /** The views that run to the top edge: their pages get the inset. */
-    views: WebContents[];
-    /** The server's page gets the drag strip as CSS; the app's own pages have it in their stylesheet. */
+    /** The server's view: its page is told of the band, unless it makes room itself. */
     server: WebContents;
 }
 
 export function setUpTitleBar(host: TitleBarHost): {
-    /** How far down the views start: 0, unless the page could not be told of the inset (they then start below it). */
+    /** How far down the server's view starts: 0, unless its page could not be told of the band. */
     offset: () => number;
     themeChanged: (theme: ThemeColors) => void;
 } {
@@ -74,12 +85,17 @@ export function setUpTitleBar(host: TitleBarHost): {
         return { offset: () => 0, themeChanged: () => undefined };
     }
 
+    const contents = host.server;
+    const band = bandHeight(host.platform);
     let failed = false;
+    /** Whether the page now shown makes its own room. Kept across loads of the same origin: the next one likely does too. */
+    let ownRoom = false;
+    let origin = "";
 
-    // In full screen the controls hide (macOS) or the strip has nothing to hold: the page takes the whole window.
-    const inset = () => (host.window.isFullScreen() ? 0 : BAND);
+    // In full screen the controls hide (macOS) or there is nothing to keep clear of: the page takes the whole window.
+    const inset = () => (ownRoom || host.window.isFullScreen() ? 0 : band);
 
-    const tell = async (contents: WebContents): Promise<void> => {
+    const tell = async (): Promise<void> => {
         if (contents.isDestroyed()) {
             return;
         }
@@ -99,31 +115,62 @@ export function setUpTitleBar(host: TitleBarHost): {
         }
     };
 
-    const tellAll = () => {
-        for (const contents of host.views) {
-            void tell(contents);
+    const check = async (): Promise<void> => {
+        let own = false;
+
+        try {
+            own = (await contents.executeJavaScript(OWN_ROOM, false)) === true;
+        } catch {
+            own = false;
+        }
+
+        if (own !== ownRoom) {
+            ownRoom = own;
+            void tell();
+            host.window.emit("resize");
         }
     };
 
-    for (const contents of host.views) {
-        // A crashed page comes back without it; DevTools opening can take the protocol over for a moment.
-        contents.on("render-process-gone", () => void tell(contents));
-        contents.on("did-start-loading", () => void tell(contents));
-        contents.debugger.on("detach", () => {
-            setTimeout(() => void tell(contents), 500);
-        });
-    }
+    contents.on("did-start-navigation", (details) => {
+        if (!details.isMainFrame || details.isSameDocument) {
+            return;
+        }
 
-    host.server.on("dom-ready", () => {
-        void host.server.insertCSS(DRAG_CSS).catch(() => undefined);
+        let next = "";
+
+        try {
+            next = new URL(details.url).origin;
+        } catch {
+            next = "";
+        }
+
+        // Another site (a sign-in page): told of the band until it shows that it makes its own room.
+        if (next !== origin) {
+            origin = next;
+            ownRoom = false;
+        }
+
+        void tell();
     });
 
-    host.window.on("enter-full-screen", tellAll);
-    host.window.on("leave-full-screen", tellAll);
-    tellAll();
+    // A module script runs before DOMContentLoaded, so the mark is there by then; checked again once it all loads.
+    contents.on("dom-ready", () => {
+        void contents.insertCSS(DRAG_CSS).catch(() => undefined);
+        void check();
+    });
+    contents.on("did-finish-load", () => void check());
+    // A crashed page comes back without the override; DevTools opening can take the protocol over for a moment.
+    contents.on("render-process-gone", () => void tell());
+    contents.debugger.on("detach", () => {
+        setTimeout(() => void tell(), 500);
+    });
+
+    host.window.on("enter-full-screen", () => void tell());
+    host.window.on("leave-full-screen", () => void tell());
+    void tell();
 
     return {
-        offset: () => (failed ? inset() : 0),
+        offset: () => (failed && !ownRoom ? inset() : 0),
         themeChanged: (theme) => {
             if (host.platform !== "darwin") {
                 host.window.setTitleBarOverlay(overlayColors(theme));
