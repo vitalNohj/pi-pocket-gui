@@ -213,7 +213,8 @@ code {
     white-space: nowrap;
 }
 
-.pill[data-state="detected"] {
+.pill[data-state="detected"],
+.pill[data-state="connected"] {
     color: var(--ok);
 }
 
@@ -333,6 +334,11 @@ input[type="text"].short {
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+}
+
+/* Check on the left, Connect on the right. */
+#connect {
+    margin-left: auto;
 }
 
 button {

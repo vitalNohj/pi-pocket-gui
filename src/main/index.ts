@@ -452,6 +452,7 @@ function configState(): ConfigState {
         reason: state.reason,
         ...(state.probe === undefined ? {} : { probe: state.probe }),
         ...(state.retry === undefined ? {} : { nextRetryAt: state.retry.at }),
+        ...(state.loadedUrl === undefined ? {} : { connectedUrl: state.loadedUrl }),
         canReturn: state.loadedUrl !== undefined && state.reason.kind === "user",
         trayAvailable: state.trayAvailable,
         translucency: state.appearance?.support() ?? { kind: "unsupported", message: "" },

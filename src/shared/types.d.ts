@@ -130,6 +130,8 @@ export interface ConfigState {
     probe?: ProbeResult;
     /** When the next automatic try is, while the server cannot be reached (ms since the epoch). */
     nextRetryAt?: number;
+    /** The address Pi Pocket is open at in the app, while it is (the server's page loaded or loading). */
+    connectedUrl?: string;
     /** The server was open before the config screen: the page offers to go back. */
     canReturn: boolean;
     /** The desktop has a tray. Without one, close minimizes. */

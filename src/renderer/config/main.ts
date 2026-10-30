@@ -39,6 +39,9 @@ let state: ConfigState | undefined;
 /** The address the person is editing; a state update from the main process does not overwrite it while it differs. */
 let editing = false;
 let checkSeq = 0;
+/** The last check this page made, and of which address: Connect, once connected, waits for a check of a new one. */
+let checked: ProbeResult | undefined;
+const connectButton = element<HTMLButtonElement>("connect");
 
 // ——— The address, as one field or as parts ———
 
@@ -96,7 +99,15 @@ for (const input of [urlInput, hostInput, portInput, pathInput, schemeInput]) {
     input.addEventListener("input", () => {
         editing = true;
         urlError.hidden = true;
-        showStatus(undefined, "Not checked yet");
+        checkSeq++;
+
+        if (state !== undefined && connectedHere(state)) {
+            showConnected(state);
+        } else {
+            showStatus(undefined, "Not checked yet");
+        }
+
+        updateConnect();
     });
 }
 
@@ -136,6 +147,61 @@ function showStatus(probe: ProbeResult | undefined, pending?: string): void {
             statusDetail.textContent = probe.message;
             break;
     }
+}
+
+/** The typed address is the one Pi Pocket is open at. */
+function connectedHere(next: ConfigState): boolean {
+    return next.connectedUrl !== undefined && sameUrl(typedUrl(), next.connectedUrl);
+}
+
+function sameUrl(a: string, b: string): boolean {
+    const plain = (url: string) => {
+        try {
+            const parsed = new URL(url.trim());
+
+            return `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/+$/, "")}`;
+        } catch {
+            return url.trim().replace(/\/+$/, "");
+        }
+    };
+
+    return plain(a) === plain(b);
+}
+
+function showConnected(next: ConfigState): void {
+    const bridge = next.probe !== undefined && next.probe.kind === "detected" && sameUrl(next.probe.url, next.connectedUrl ?? "") ? next.probe.bridge : 1;
+
+    status.dataset.state = "connected";
+    status.textContent = "Connected";
+    statusDetail.textContent =
+        bridge > 0
+            ? `Pi Pocket is open at ${next.connectedUrl ?? ""}, with desktop support.`
+            : `Pi Pocket is open at ${next.connectedUrl ?? ""}. It has no desktop support yet (notifications, tray pins): please update it.`;
+}
+
+/**
+ * Connect, while Pi Pocket is open: only for another address, once a check of it found something there. Before that
+ * (first run, a failed load), it checks and connects in one go, as a server not detected may still be right.
+ */
+function updateConnect(): void {
+    if (state === undefined || state.connectedUrl === undefined) {
+        connectButton.disabled = false;
+        connectButton.title = "";
+
+        return;
+    }
+
+    if (connectedHere(state)) {
+        connectButton.disabled = true;
+        connectButton.title = "Already connected to this address. Change it, then check it, to connect elsewhere.";
+
+        return;
+    }
+
+    const ready = checked !== undefined && checked.kind !== "invalid" && checked.kind !== "unreachable" && sameUrl(checked.url, typedUrl());
+
+    connectButton.disabled = !ready;
+    connectButton.title = ready ? "" : "Check the new address first.";
 }
 
 function reasonBanner(reason: ConfigReason): { text: string; tone: "error" | "info" } | undefined {
@@ -250,9 +316,13 @@ function render(next: ConfigState): void {
 
     retry.hidden = !failing && next.nextRetryAt === undefined;
 
-    if (!editing || next.probe?.url === typedUrlNormalized()) {
+    if (connectedHere(next)) {
+        showConnected(next);
+    } else if (!editing || (next.probe !== undefined && sameUrl(next.probe.url, typedUrl()))) {
         showStatus(next.probe);
     }
+
+    updateConnect();
 
     window.clearInterval(countdown);
     countdown = undefined;
@@ -271,10 +341,6 @@ function render(next: ConfigState): void {
     }
 
     renderSettings(next);
-}
-
-function typedUrlNormalized(): string {
-    return typedUrl().replace(/\/+$/, "");
 }
 
 // ——— Connection actions ———
@@ -296,7 +362,9 @@ async function check(): Promise<ProbeResult | undefined> {
     const result = await gui.probe(url);
 
     if (seq === checkSeq) {
+        checked = result;
         showStatus(result);
+        updateConnect();
 
         if (result.kind === "invalid") {
             urlError.hidden = false;
@@ -313,6 +381,11 @@ element("test").addEventListener("click", () => {
 
 element<HTMLFormElement>("connect-form").addEventListener("submit", (event) => {
     event.preventDefault();
+
+    if (connectButton.disabled) {
+        return;
+    }
+
     void (async () => {
         const result = await check();
 
