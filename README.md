@@ -1,59 +1,121 @@
-# Pi Pocket (desktop)
+<div align="center">
 
-A desktop app for [Pi Pocket](https://github.com/TannerMidd/pi-pocket). It connects to a Pi Pocket server that already runs, on this computer or another one, and adds what a browser tab cannot: a tray with your pinned sessions, a badge, native notifications, a global shortcut, launch at login, and offline dictation.
+<img src="assets/icon.svg" width="96" alt="Pi Pocket" />
 
-It does not install or run a server. Start one first:
+# Pi Pocket for desktop
+
+**Your [Pi Pocket](https://github.com/TannerMidd/pi-pocket) server, as a real app on macOS, Windows, and Linux.**
+
+A tray with your pinned sessions · a badge · native notifications · a seamless window · a see-through background
+
+[Download](https://github.com/vitalNohj/pi-pocket-gui/releases/latest) · [Install](#install) · [Settings](#settings) · [Roadmap](#roadmap)
+
+<img src="docs/images/hero.png" alt="Pi Pocket in the desktop app: the session list on the left, a conversation on the right, the macOS traffic lights over the sidebar" width="100%" />
+
+</div>
+
+## What it is
+
+The app opens the Pi Pocket you already run (on this computer, on a home server, or behind a tunnel) in a window of its own, and adds what a browser tab cannot do. It runs no server and no model itself: your sessions, keys, and history stay on the server.
+
+|  |  |
+|---|---|
+| **Tray** | Your pinned sessions with their state (◆ waiting for you, ◐ working, ✕ failed), one click away. |
+| **Badge** | How many sessions need you, on the dock or taskbar icon. |
+| **Notifications** | Native ones, even with the window hidden. An approval can be answered from the notification. |
+| **Seamless window** | No title bar: Pi Pocket runs to the top edge, and the window's buttons sit over it. |
+| **See-through background** | The desktop shows through Pi Pocket's background, blurred, as much as you choose. |
+| **Your theme** | The settings screen, the window, and the tray's π follow the theme Pi Pocket shows. |
+| **Global shortcut** | Show or hide the window from anywhere. |
+| **Launch at login** | Optionally hidden in the tray, so notifications keep coming. |
+| **Updates** | It checks for new releases and installs them (or downloads them, on macOS). |
+
+## Install
+
+You need a Pi Pocket server first. On any computer with Node.js 22.19 or newer:
 
 ```bash
 npm install -g pi-pocket && pi-pocket
 ```
 
-Then open the app, put the server's address (default `http://127.0.0.1:8787`), and sign in inside Pi Pocket with your login link or an invite.
+Then download the app for your computer from [**Releases**](https://github.com/vitalNohj/pi-pocket-gui/releases/latest):
 
-> Status: early. See [DESIGN.md](DESIGN.md).
+| | File | |
+|---|---|---|
+| **macOS** | `…-mac-arm64.dmg` (Apple Silicon) or `…-mac-x64.dmg` (Intel) | Drag the app into Applications. It is not signed by Apple yet: the first time, right-click it and choose **Open**. If macOS still refuses, use **Open Anyway** in System Settings → Privacy & Security, or run `xattr -cr "/Applications/Pi Pocket.app"`. |
+| **Windows** | `…-win-x64.exe` | SmartScreen warns about an unsigned app: **More info** → **Run anyway**. |
+| **Linux** | `…-linux-x86_64.AppImage` or `…-linux-amd64.deb` | Make the AppImage executable and run it, or install the .deb. |
 
-## Install
+Open the app, give it your server's address (`http://127.0.0.1:8787` by default), and sign in inside Pi Pocket with your login link or an invite.
 
-Download the file for your computer from [Releases](https://github.com/vitalNohj/pi-pocket-gui/releases/latest):
+> Version 0.1.0 was named `pi-pocket-gui.app` on macOS. After installing a newer one, move the old one to the Trash.
 
-- **macOS:** `…-mac-arm64.dmg` (Apple Silicon) or `…-mac-x64.dmg` (Intel). Open it and drag the app into Applications. The app is not signed by Apple yet, so the first time, right-click it and choose **Open**; if macOS still refuses, use **Open Anyway** in System Settings → Privacy & Security, or run `xattr -cr "/Applications/Pi Pocket.app"`. (Version 0.1.0 was named `pi-pocket-gui.app`: after installing a newer one, move the old one to the Trash.)
-- **Windows:** `…-win-x64.exe`. Windows SmartScreen warns about an unsigned app: **More info** → **Run anyway**.
-- **Linux:** `…-linux-x86_64.AppImage` (make it executable and run it), or `…-linux-amd64.deb`.
+## A closer look
 
-### Updates
+### A window without a title bar
 
-The app looks for a new release at start and every 6 hours (Server settings… → Updates).
+Pi Pocket runs to the window's top edge, and only what sits under the window's buttons makes room for them: on macOS the sidebar starts a little lower and the conversation keeps its whole height. On Windows and Linux the buttons sit at the top right instead.
 
-- **Windows and the AppImage** download it and install it when the app restarts; the app asks first.
-- **macOS:** until the app is signed by Apple, macOS will not let it replace itself. It downloads the new disk image to Downloads, checked against GitHub's checksum, and opens it: drag the app into Applications over the old one. Settings and your sign-in stay.
-- **The .deb** opens the release page: install the new .deb the same way.
+<img src="docs/images/windows.png" alt="The Windows and Linux layout: minimize, maximize, and close over the conversation's top bar, which makes room for them" width="100%" />
 
-## Settings
+The app tells the page where the buttons are through the [Window Controls Overlay](https://developer.mozilla.org/en-US/docs/Web/API/Window_Controls_Overlay_API), the web's own standard for it. An older Pi Pocket gets a plain band as tall as the buttons. Drag the window by the bar beside them. Settings → Window → Title bar → **The system's** brings back the normal title bar, after a restart.
 
-Everything is in **Server settings…** (the File menu, the tray, or Ctrl+,), and in a JSON file you can edit by hand:
+### See-through background
 
-- Linux: `~/.config/pi-pocket-gui/config.json`
-- macOS: `~/Library/Application Support/pi-pocket-gui/config.json`
-- Windows: `%APPDATA%\pi-pocket-gui\config.json`
+Turn on **See-through background** in Settings → Appearance, and set the **Opacity** from 0% to 100%. Menus, sheets, and cards stay solid, so text stays readable.
 
-A value that is not valid falls back to its default, and the settings screen lists it.
-
-### Title bar
-
-Seamless by default: the window has no title bar of its own. Pi Pocket runs to the top edge, and the window's buttons sit over it (macOS's traffic lights, close to the corner; on Windows and Linux, the minimize, maximize, and close buttons). The app tells the page where they are through the Window Controls Overlay, the web's standard for it, and Pi Pocket makes room only under them: on macOS the sidebar starts a little lower, and the conversation keeps its whole height. Drag the window by the bar or strip beside the buttons. An older Pi Pocket, without that, gets a band along the whole top, just as tall as the buttons. On Windows and Linux the seamless window has no menu bar, but its keys still work (Ctrl+, opens Server settings). Settings → Window → Title bar → **The system's** brings the system's title bar back, after a restart.
-
-### Appearance
-
-The settings screen, the window's background, and the tray's π take Pi Pocket's colors from the theme its page shows, and follow when you change it there. The app keeps them (`theme.json` beside `config.json`), so the next start looks the same before the server answers.
-
-
-**See-through background** lets the desktop show through Pi Pocket's background, blurred; **Opacity** sets how much. Menus, sheets, and cards stay solid, so text stays readable.
+<img src="docs/images/see-through.png" alt="The desktop's colors showing through Pi Pocket's background, blurred" width="100%" />
 
 - **macOS:** the system's blur (vibrancy). **Blur** picks its material.
 - **Windows 11 (22H2 or newer):** Acrylic or Mica. Windows 10 cannot.
-- **Linux:** turning it on needs a restart (the settings screen offers one). Your compositor does the blur: on Hyprland, `decoration:blur`; on KDE, the Blur effect. GNOME shows it see-through, without blur.
+- **Linux:** turning it on takes a restart (the settings screen offers one). Your compositor does the blur: on Hyprland, `decoration:blur`; on KDE, the Blur effect. GNOME shows it see-through, without blur.
 
-It changes the colors of Pi Pocket's page in this app only, through Pi Pocket's theme colors. If a Pi Pocket release renames them, the page simply stays solid.
+### It follows your theme
+
+Change the theme in Pi Pocket and the app follows: the settings screen, the window's own background, and the tray's π. It remembers the colors, so the next start looks right before the server answers.
+
+<img src="docs/images/light.png" alt="The same window in Catppuccin Latte, a light theme" width="100%" />
+
+### Settings
+
+Everything is on one screen: **Server settings…** in the File menu, the tray, Pi Pocket's own menu, or Ctrl+, (⌘, on macOS). The badge says **Connected** once Pi Pocket is open; **Connect** waits until you change the address and check the new one.
+
+<img src="docs/images/settings.png" alt="The settings screen: the connection on the left, the Window settings on the right" width="100%" />
+
+The settings are also a JSON file you can edit by hand. A value that is not valid falls back to its default, and the settings screen lists it.
+
+| | |
+|---|---|
+| Linux | `~/.config/pi-pocket-gui/config.json` |
+| macOS | `~/Library/Application Support/pi-pocket-gui/config.json` |
+| Windows | `%APPDATA%\pi-pocket-gui\config.json` |
+
+### Updates
+
+The app looks for a new release at start and every 6 hours (Settings → Updates → **Check now**).
+
+- **Windows and the AppImage** download it and install it when the app restarts. The app asks first.
+- **macOS:** until the app is signed by Apple, macOS will not let it replace itself. It downloads the new disk image to Downloads, checked against GitHub's checksum, and opens it: drag the app into Applications over the old one. Your settings and sign-in stay.
+- **The .deb** opens the release page: install the new .deb the same way.
+
+## How it talks to Pi Pocket
+
+Pi Pocket's page runs in the app as it does in a browser, with one addition: a small, versioned bridge (`window.pocketHost`) through which the page tells the app about pins, the badge, and notifications, and the app tells the page when its window is hidden. The bridge is on a branch of Pi Pocket and not yet in a release: against a Pi Pocket without it, the app still works, without the tray pins, badge, and notifications, and says so once.
+
+## Roadmap
+
+> [!IMPORTANT]
+> **Remote execution is being designed, not built.** Nothing below is in the app yet.
+
+The idea: a session whose tools (files, commands, git) run on **this** computer, while the agent, its model, its keys, and the history stay on the server. You would pick **Remote** in Pi Pocket's New session sheet, then a computer and a folder on it.
+
+The plan is for the app to run a small helper, built from the same Pi Pocket code the server runs, that connects out to the server (no open ports) and carries out the requests of the sessions you allow. A session waits while the computer is asleep or offline, and never runs the step on the server instead. The design, the open questions, and estimates are in [docs/remote/plan.md](docs/remote/plan.md).
+
+Also planned:
+
+- **New session from anywhere:** ⌘N / Ctrl+N, the dock's or taskbar's menu, and a `pi-pocket://new` link.
+- **Offline dictation:** speech to text on this computer, for Pi Pocket's microphone button.
+- **Signed builds** for macOS and Windows, so updates install themselves everywhere.
 
 ## Develop
 
@@ -72,6 +134,8 @@ A push to `main` builds every platform on GitHub Actions (the run's artifacts). 
 npm version patch   # bumps package.json and tags vX.Y.Z
 git push --follow-tags
 ```
+
+The screenshots above come from the app itself, run against a Pi Pocket with made-up people and sessions ([scripts/screenshots/](scripts/screenshots/)).
 
 ## License
 

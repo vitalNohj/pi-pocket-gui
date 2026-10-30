@@ -1,6 +1,6 @@
 // Drives a running dev build over the DevTools protocol: list pages, screenshot one, or evaluate in it.
 //   node scripts/dev/cdp.mjs list
-//   node scripts/dev/cdp.mjs shot <url-substring> <out.png>
+//   node scripts/dev/cdp.mjs shot <url-substring> <out.png> [scale]
 //   node scripts/dev/cdp.mjs eval <url-substring> '<expression>'
 // Start the app with --remote-debugging-port=9333 --remote-allow-origins=* first (development only).
 const port = process.env.CDP_PORT ?? "9333";
@@ -42,7 +42,18 @@ function send(method, params = {}) {
 }
 
 if (command === "shot") {
-    const result = await send("Page.captureScreenshot", { format: "png" });
+    // An optional scale (a 4th argument, e.g. 0.5) gives a smaller copy, for a quick look.
+    const scale = Number(process.argv[5] ?? 1);
+    const metrics = (await send("Page.getLayoutMetrics")).result.cssVisualViewport;
+    // CDP_CLEAR=1: what the page leaves see-through stays so in the PNG (for the see-through background).
+    if (process.env.CDP_CLEAR === "1") {
+        await send("Emulation.setDefaultBackgroundColorOverride", { color: { r: 0, g: 0, b: 0, a: 0 } });
+    }
+
+    const result = await send("Page.captureScreenshot", {
+        format: "png",
+        ...(scale === 1 ? {} : { clip: { x: 0, y: 0, width: metrics.clientWidth, height: metrics.clientHeight, scale } }),
+    });
     const { writeFileSync } = await import("node:fs");
 
     writeFileSync(arg, Buffer.from(result.result.data, "base64"));

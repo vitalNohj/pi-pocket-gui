@@ -1,0 +1,80 @@
+<!doctype html>
+<!--
+    Puts a screenshot of the app in a window frame, for the README. Open with ?shot=<png>&style=mac|win|tray&ground=<css>
+    and screenshot the #stage element (frame.mjs does that). The screenshots themselves come from the dev build
+    against demo-server.mts: made-up people and sessions only.
+-->
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <style>
+            html, body { margin: 0; background: transparent; }
+            #stage {
+                display: inline-block;
+                padding: 64px 72px 84px;
+                background: var(--ground);
+                font-family: -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+            }
+            .window {
+                position: relative;
+                width: 1360px;
+                height: 860px;
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
+                background: var(--behind, transparent);
+            }
+            .window[data-style="win"] { border-radius: 8px; }
+            .window img { display: block; width: 1360px; height: 860px; position: relative; }
+            .blur {
+                position: absolute;
+                inset: 0;
+                background: var(--ground);
+                background-position: -72px -64px;
+                filter: blur(28px) saturate(1.4);
+                transform: scale(1.1);
+            }
+            .lights { position: absolute; top: 8px; left: 12px; display: flex; gap: 8px; z-index: 2; }
+            .lights i { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.25); }
+            .lights i:nth-child(1) { background: #ff5f57; }
+            .lights i:nth-child(2) { background: #febc2e; }
+            .lights i:nth-child(3) { background: #28c840; }
+            .controls { position: absolute; top: 0; right: 0; height: 32px; display: flex; z-index: 2; color: var(--symbol, #c0caf5); }
+            .controls b { width: 46px; display: grid; place-items: center; font-weight: 400; font-size: 13px; }
+        </style>
+    </head>
+    <body>
+        <div id="stage">
+            <div class="window" id="window">
+                <img id="shot" alt="" />
+            </div>
+        </div>
+        <script>
+            const query = new URLSearchParams(location.search);
+            const style = query.get("style") ?? "mac";
+            const win = document.getElementById("window");
+
+            document.documentElement.style.setProperty("--ground", query.get("ground") ?? "linear-gradient(135deg, #1d2b64, #f8cdda)");
+            win.dataset.style = style;
+
+            if (query.get("clear") === "1") {
+                const blur = document.createElement("div");
+
+                blur.className = "blur";
+                win.prepend(blur);
+            }
+
+            if (style === "mac") {
+                win.insertAdjacentHTML("beforeend", '<div class="lights"><i></i><i></i><i></i></div>');
+            } else {
+                document.documentElement.style.setProperty("--symbol", query.get("symbol") ?? "#c0caf5");
+                win.insertAdjacentHTML("beforeend", '<div class="controls"><b>&#x2014;</b><b>&#x25A2;</b><b>&#x2715;</b></div>');
+            }
+
+            const shot = document.getElementById("shot");
+
+            shot.onload = () => (document.body.dataset.ready = "1");
+            shot.src = query.get("shot");
+        </script>
+    </body>
+</html>
