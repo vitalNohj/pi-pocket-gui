@@ -84,7 +84,8 @@ html {
 .page {
     max-width: 1320px;
     margin: 0 auto;
-    padding: 32px 24px 48px;
+    /* The window's controls sit in the inset, over the window's top edge (src/main/titlebar.ts). */
+    padding: calc(max(32px, env(safe-area-inset-top, 0px) + 12px)) 24px 48px;
     display: grid;
     gap: 16px;
 }
@@ -108,7 +109,7 @@ html {
 
     .column {
         position: sticky;
-        top: 16px;
+        top: calc(16px + env(safe-area-inset-top, 0px));
     }
 }
 
@@ -292,6 +293,8 @@ textarea {
 
 select {
     font-family: var(--sans);
+    /* A row's choice keeps its words whole; the row's text wraps instead. */
+    flex: none;
 }
 
 textarea {
@@ -570,4 +573,16 @@ input[type="range"] {
 
 .row.off {
     opacity: 0.5;
+}
+
+/* The strip at the top edge, under the window's controls, drags the window (src/main/titlebar.ts). */
+:root::after {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top, 0px);
+    app-region: drag;
+    z-index: 10;
 }

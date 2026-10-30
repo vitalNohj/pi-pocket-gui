@@ -385,6 +385,7 @@ function renderSettings(next: ConfigState): void {
     }
 
     renderAppearance(next);
+    renderTitleBar(next);
 
     element("tray-note").textContent = next.trayAvailable
         ? "Closing the window keeps the app running in the tray, so notifications keep coming."
@@ -451,6 +452,18 @@ function scheduleSave(): void {
     }, 300);
 }
 
+/** The title bar: a change takes a new window. Seamless on Windows and Linux has no menu bar to show. */
+function renderTitleBar(next: ConfigState): void {
+    const chosen = next.settings.window.titleBar;
+
+    element("title-bar-restart").hidden = chosen === next.titleBarAtStart;
+    element("menu-bar-row").hidden = next.platform === "darwin" || next.titleBarAtStart === "seamless";
+    element("title-bar-note").textContent =
+        next.platform === "darwin"
+            ? "Seamless: Pi Pocket runs to the window's top edge, under the traffic lights."
+            : "Seamless: Pi Pocket runs to the window's top edge, under the window's buttons. The menu bar's keys still work (Ctrl+, opens these settings).";
+}
+
 /** The Appearance card: what this desktop can do, and the config screen itself see-through like the server's page. */
 function renderAppearance(next: ConfigState): void {
     const appearance = next.settings.appearance;
@@ -507,9 +520,11 @@ opacity.addEventListener("input", () => {
     scheduleSave();
 });
 
-element("relaunch").addEventListener("click", () => {
-    void gui.relaunch();
-});
+for (const button of document.querySelectorAll("[data-relaunch]")) {
+    button.addEventListener("click", () => {
+        void gui.relaunch();
+    });
+}
 
 element<HTMLFormElement>("settings-form").addEventListener("submit", (event) => {
     event.preventDefault();

@@ -38,6 +38,10 @@ Everything is in **Server settings…** (the File menu, the tray, or Ctrl+,), an
 
 A value that is not valid falls back to its default, and the settings screen lists it.
 
+### Title bar
+
+Seamless by default: the window has no title bar of its own. Pi Pocket runs to the top edge, and the window's buttons sit over it (macOS's traffic lights; on Windows and Linux, the minimize, maximize, and close buttons). Drag the window by the strip along its top edge. The app tells the page the buttons are there as a phone tells a page of its notch (a top safe-area inset), so Pi Pocket's own bars make room for them in its own colors; nothing in Pi Pocket is specific to this app. On Windows and Linux the seamless window has no menu bar, but its keys still work (Ctrl+, opens Server settings). Settings → Window → Title bar → **The system's** brings the system's title bar back, after a restart.
+
 ### Appearance
 
 The settings screen, the window's background, and the tray's π take Pi Pocket's colors from the theme its page shows, and follow when you change it there. The app keeps them (`theme.json` beside `config.json`), so the next start looks the same before the server answers.

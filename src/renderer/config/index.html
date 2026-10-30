@@ -2,7 +2,7 @@
 <html lang="en">
     <head>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <title>Pi Pocket — Server settings</title>
         <link rel="stylesheet" href="style.css" />
         <script type="module" src="main.js"></script>
@@ -114,7 +114,17 @@
                             <label class="row"><span><strong>Close to tray</strong><small id="tray-note">Closing the window keeps the app running in the tray, so notifications keep coming.</small></span><input type="checkbox" data-key="window.closeToTray" /></label>
                             <label class="row"><span><strong>Launch at login</strong><small>Start the app when you sign in to this computer.</small></span><input type="checkbox" data-key="window.launchAtLogin" /></label>
                             <label class="row"><span><strong>Start hidden</strong><small>When started at login, stay in the tray.</small></span><input type="checkbox" data-key="window.startHidden" /></label>
-                            <label class="row"><span><strong>Show the menu bar</strong><small>Otherwise Alt shows it.</small></span><input type="checkbox" data-key="window.showMenuBar" /></label>
+                            <label class="row"><span><strong>Title bar</strong><small id="title-bar-note">Seamless: Pi Pocket runs to the window's top edge, under the window's buttons.</small></span>
+                                <select data-key="window.titleBar">
+                                    <option value="seamless">Seamless</option>
+                                    <option value="system">The system's</option>
+                                </select>
+                            </label>
+                            <div class="row" id="title-bar-restart" hidden>
+                                <span><strong>Restart to apply</strong><small>The window takes a new title bar when it opens.</small></span>
+                                <button type="button" class="secondary" data-relaunch>Restart now</button>
+                            </div>
+                            <label class="row" id="menu-bar-row"><span><strong>Show the menu bar</strong><small>Otherwise Alt shows it.</small></span><input type="checkbox" data-key="window.showMenuBar" /></label>
                             <label class="row"><span><strong>Global shortcut</strong><small>Show or hide the window from anywhere.</small></span><input type="checkbox" data-key="window.hotkeyEnabled" /></label>
                             <label class="row"><span><strong>Shortcut</strong><small>For example CommandOrControl+Shift+P.</small></span><input type="text" data-key="window.hotkey" class="short" spellcheck="false" /></label>
                             <label class="row"><span><strong>Pi Pocket's links to new windows</strong><small>Its own pages, such as an artifact opened in a tab.</small></span>
@@ -132,7 +142,7 @@
                             <label class="row"><span><strong>See-through background</strong><small id="translucent-note">The desktop shows through Pi Pocket's background, blurred.</small></span><input type="checkbox" data-key="appearance.translucent" /></label>
                             <div class="row" id="translucent-restart" hidden>
                                 <span><strong>Restart to apply</strong><small>On Linux, a window turns see-through only when it opens.</small></span>
-                                <button type="button" id="relaunch" class="secondary">Restart now</button>
+                                <button type="button" class="secondary" data-relaunch>Restart now</button>
                             </div>
                             <label class="row"><span><strong>Opacity</strong><small>How solid the background stays. Menus, sheets, and cards stay solid.</small></span>
                                 <span class="range"><input type="range" data-key="appearance.opacity" min="40" max="100" step="1" /><output id="opacity-value"></output></span>

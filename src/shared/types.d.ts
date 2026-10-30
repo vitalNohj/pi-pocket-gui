@@ -51,6 +51,8 @@ export interface Settings {
         startHidden: boolean;
         /** Always show the menu bar (Linux and Windows); otherwise Alt shows it. */
         showMenuBar: boolean;
+        /** Seamless: no title bar, Pi Pocket up to the top edge under the window's controls. Takes a restart. */
+        titleBar: TitleBarStyle;
         /** A global shortcut that shows or hides the window. */
         hotkeyEnabled: boolean;
         /** Electron accelerator syntax, e.g. "CommandOrControl+Shift+P". */
@@ -135,6 +137,8 @@ export interface ConfigState {
     translucency: TranslucencySupport;
     /** Linux: the window was made see-through at start (turning it on takes a restart; off works at once). */
     translucentAtStart: boolean;
+    /** The title bar the window was made with: a change takes a restart. */
+    titleBarAtStart: TitleBarStyle;
     /** Pi Pocket's colors, the last the server's page showed (or the default before any). */
     theme: ThemeColors;
     platform: string;
@@ -182,6 +186,9 @@ export type HostEvent =
     | { type: "approve"; id: string; allow: boolean };
 
 /** Pi Pocket's theme tokens the app takes (src/main/theme.ts). */
+/** How the window's top looks: Pi Pocket up to the edge, or the system's own title bar. */
+export type TitleBarStyle = "seamless" | "system";
+
 export type ThemeToken =
     | "desk"
     | "bg"

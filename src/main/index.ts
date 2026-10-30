@@ -20,10 +20,11 @@ import {
     type IpcMainInvokeEvent,
     type MenuItemConstructorOptions,
 } from "electron";
-import type { ConfigReason, ConfigState, ProbeResult, Settings, SettingsProblem, ThemeColors } from "../shared/types";
+import type { ConfigReason, ConfigState, ProbeResult, Settings, SettingsProblem, ThemeColors, TitleBarStyle } from "../shared/types";
 import { retryDelayMs } from "./backoff";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
 import { setUpAppearance } from "./appearance";
+import { setUpTitleBar, titleBarOptions } from "./titlebar";
 import { loadTheme, sameTheme, saveTheme } from "./theme";
 import { setUpDesktop } from "./desktop";
 import { setUpUpdates } from "./updates";
@@ -90,6 +91,9 @@ interface Gui {
     appearance: ReturnType<typeof setUpAppearance> | undefined;
     /** Linux: the window was made see-through at start; turning that on needs a new window. */
     translucentAtStart: boolean;
+    /** The title bar (src/main/titlebar.ts), as the window was made: a change takes a restart. */
+    titleBar: ReturnType<typeof setUpTitleBar> | undefined;
+    titleBarAtStart: TitleBarStyle;
     /** Pi Pocket's colors, the last its page showed (src/main/theme.ts), and where they are kept. */
     theme: ThemeColors;
     themePath: string;
@@ -112,6 +116,7 @@ async function start(): Promise<void> {
     const themePath = join(app.getPath("userData"), "theme.json");
     const theme = loadTheme(themePath);
     const solid = theme.colors.bg;
+    const titleBarAtStart = loaded.settings.window.titleBar;
 
     const window = new BaseWindow({
         title: "Pi Pocket",
@@ -125,6 +130,7 @@ async function start(): Promise<void> {
         ...(translucentAtStart ? { transparent: true } : {}),
         icon: join(ASSETS, "icon-512.png"),
         autoHideMenuBar: !loaded.settings.window.showMenuBar,
+        ...titleBarOptions(process.platform, titleBarAtStart, theme),
     });
 
     const serverSession = session.fromPartition(SERVER_PARTITION);
@@ -189,10 +195,20 @@ async function start(): Promise<void> {
         updates: undefined,
         appearance: undefined,
         translucentAtStart,
+        titleBar: undefined,
+        titleBarAtStart,
         theme,
         themePath,
         toldNoBridge: false,
     };
+
+    gui.titleBar = setUpTitleBar({
+        platform: process.platform,
+        style: titleBarAtStart,
+        window,
+        views: [server.webContents, config.webContents],
+        server: server.webContents,
+    });
 
     gui.appearance = setUpAppearance({
         platform: process.platform,
@@ -256,6 +272,7 @@ async function start(): Promise<void> {
             state.theme = next;
             saveTheme(state.themePath, next);
             state.appearance?.themeChanged();
+            state.titleBar?.themeChanged(next);
             pushConfigState();
         },
     });
@@ -277,6 +294,8 @@ async function start(): Promise<void> {
     window.on("resize", layout);
     window.on("maximize", layout);
     window.on("unmaximize", layout);
+    window.on("enter-full-screen", layout);
+    window.on("leave-full-screen", layout);
 
     const remember = () => {
         if (!window.isMinimized() && !window.isMaximized()) {
@@ -372,7 +391,9 @@ function layout(): void {
     }
 
     const { width, height } = gui.window.getContentBounds();
-    const bounds = { x: 0, y: 0, width, height };
+    // Below the title bar's strip only when the page could not be told to keep clear of it (src/main/titlebar.ts).
+    const top = gui.titleBar?.offset() ?? 0;
+    const bounds = { x: 0, y: top, width, height: Math.max(0, height - top) };
 
     gui.server.setBounds(bounds);
     gui.config.setBounds(bounds);
@@ -437,6 +458,7 @@ function configState(): ConfigState {
         trayAvailable: state.trayAvailable,
         translucency: state.appearance?.support() ?? { kind: "unsupported", message: "" },
         translucentAtStart: state.translucentAtStart,
+        titleBarAtStart: state.titleBarAtStart,
         theme: state.theme,
         platform: process.platform,
         appVersion: app.getVersion(),
