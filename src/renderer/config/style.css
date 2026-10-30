@@ -467,3 +467,11 @@ input[type="checkbox"]:checked::after {
         transition: none !important;
     }
 }
+
+.row .buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}

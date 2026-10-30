@@ -63,12 +63,15 @@ jobs:
             - uses: actions/upload-artifact@v4
               with:
                   name: pi-pocket-gui-${{ matrix.name }}
+                  # The latest*.yml files and block maps are what the app's updater reads from a release.
                   path: |
                       release/*.dmg
                       release/*.zip
                       release/*.AppImage
                       release/*.deb
                       release/*.exe
+                      release/*.blockmap
+                      release/latest*.yml
                   if-no-files-found: error
 
     release:

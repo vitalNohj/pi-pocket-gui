@@ -81,8 +81,23 @@ export type ConfigReason =
     | { kind: "outage"; url: string; message: string }
     | { kind: "crashed"; message: string };
 
+/** Where the app's own update stands (src/main/updates.ts). */
+export interface UpdateState {
+    /** How an update reaches this copy: installed by the app, a disk image to drag over, the release page, or git. */
+    method: "install" | "download" | "page" | "source";
+    status: "idle" | "checking" | "current" | "available" | "downloading" | "ready" | "error";
+    /** The newer version, once one is found. */
+    version?: string;
+    /** 0 to 100 while downloading. */
+    percent?: number;
+    message?: string;
+    /** When the last check ended (ms since the epoch). */
+    checkedAt?: number;
+}
+
 /** What the config page shows. */
 export interface ConfigState {
+    update: UpdateState;
     settings: Settings;
     defaults: Settings;
     problems: SettingsProblem[];
@@ -158,5 +173,8 @@ export interface GuiConfigApi {
     retryNow(): Promise<void>;
     openExternal(target: "github" | "docs" | "releases"): Promise<void>;
     showConfigFile(): Promise<void>;
+    checkUpdates(): Promise<void>;
+    /** The next step of an update found: download it, install it, or open its page. */
+    updateAction(): Promise<void>;
     onState(listener: (state: ConfigState) => void): () => void;
 }

@@ -156,6 +156,13 @@
                     <div class="rows">
                         <label class="row"><span><strong>Look for new versions of this app</strong><small>Pi Pocket itself updates on its server.</small></span><input type="checkbox" data-key="updates.check" /></label>
                         <label class="row"><span><strong>How often</strong><small>Hours.</small></span><input type="number" data-key="updates.intervalHours" class="short" min="1" max="720" /></label>
+                        <div class="row">
+                            <span><strong id="update-status">Not checked yet</strong><small id="update-detail"></small></span>
+                            <span class="buttons">
+                                <button type="button" id="update-action" hidden></button>
+                                <button type="button" id="update-check" class="secondary">Check now</button>
+                            </span>
+                        </div>
                     </div>
                 </details>
 

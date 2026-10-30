@@ -155,9 +155,67 @@ function reasonBanner(reason: ConfigReason): { text: string; tone: "error" | "in
 
 let countdown: number | undefined;
 
+/** The Updates card: where the app's own update stands, and the button for its next step. */
+function renderUpdate(next: ConfigState): void {
+    const update = next.update;
+    const action = element("update-action") as HTMLButtonElement;
+    const check = element("update-check") as HTMLButtonElement;
+    const busy = update.status === "checking" || update.status === "downloading";
+    const when = update.checkedAt === undefined ? "" : `Checked ${new Date(update.checkedAt).toLocaleString()}.`;
+    const how: Record<typeof update.method, string> = {
+        install: "Updates download by themselves and install when the app restarts.",
+        download: "This Mac build isn't signed by Apple, so updates can't install themselves: the app downloads the new disk image, and you drag the app over the old one.",
+        page: "Install updates the way you installed this app.",
+        source: "Run from source: git pull updates it.",
+    };
+    let status = "Not checked yet";
+    let label = "";
+
+    switch (update.status) {
+        case "checking":
+            status = "Checking…";
+            break;
+        case "current":
+            status = update.method === "source" ? `Run from source (${next.appVersion})` : `Up to date (${next.appVersion})`;
+            break;
+        case "available":
+            status = `Pi Pocket ${update.version ?? ""} is available`;
+            label = update.method === "download" ? "Download" : update.method === "page" ? "Open release" : "";
+            break;
+        case "downloading":
+            status = `Downloading ${update.version ?? ""}… ${update.percent ?? 0}%`;
+            break;
+        case "ready":
+            status = update.method === "install" ? `Pi Pocket ${update.version ?? ""} is ready` : `Pi Pocket ${update.version ?? ""} is downloaded`;
+            label = update.method === "install" ? "Restart now" : "Open it";
+            break;
+        case "error":
+            status = "The check failed";
+            break;
+        default:
+            break;
+    }
+
+    element("update-status").textContent = status;
+    element("update-detail").textContent =
+        update.status === "error" ? `${update.message ?? ""} ${when}`.trim() : `${how[update.method]} ${when}`.trim();
+    action.hidden = label === "";
+    action.textContent = label;
+    check.disabled = busy;
+}
+
+element("update-check").addEventListener("click", () => {
+    void gui.checkUpdates();
+});
+
+element("update-action").addEventListener("click", () => {
+    void gui.updateAction();
+});
+
 function render(next: ConfigState): void {
     state = next;
     element("app-version").textContent = next.appVersion;
+    renderUpdate(next);
     element("config-path").textContent = next.configPath;
 
     if (!editing) {

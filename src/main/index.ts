@@ -24,6 +24,7 @@ import type { ConfigReason, ConfigState, ProbeResult, Settings, SettingsProblem 
 import { retryDelayMs } from "./backoff";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
 import { setUpDesktop } from "./desktop";
+import { setUpUpdates } from "./updates";
 import { setLaunchAtLogin, startedAtLogin, trayAvailable } from "./platform";
 import { networkMessage, probe } from "./probe";
 import { guardContents, guardSession, openOutside, type OriginPolicy } from "./security";
@@ -81,6 +82,8 @@ interface Gui {
     quitting: boolean;
     /** The host bridge's main-process side (src/main/desktop.ts). */
     desktop: ReturnType<typeof setUpDesktop> | undefined;
+    /** The app's own updates (src/main/updates.ts). */
+    updates: ReturnType<typeof setUpUpdates> | undefined;
     /** The notice about a server without the bridge was shown in this run. */
     toldNoBridge: boolean;
 }
@@ -168,8 +171,24 @@ async function start(): Promise<void> {
         health: undefined,
         quitting: false,
         desktop: undefined,
+        updates: undefined,
         toldNoBridge: false,
     };
+
+    gui.updates = setUpUpdates({
+        assets: ASSETS,
+        window: () => window,
+        settings: () => gui!.settings,
+        changed: () => {
+            pushConfigState();
+            gui?.desktop?.refreshTray();
+        },
+        quitting: () => {
+            if (gui !== undefined) {
+                gui.quitting = true;
+            }
+        },
+    });
 
     gui.desktop = setUpDesktop({
         assets: ASSETS,
@@ -195,6 +214,7 @@ async function start(): Promise<void> {
         toggleWindow,
         openSettings,
         quit,
+        updateItem: () => gui?.updates?.trayItem(),
     });
 
     for (const change of ["show", "hide", "minimize", "restore", "focus"] as const) {
@@ -374,6 +394,7 @@ function configState(): ConfigState {
         trayAvailable: state.trayAvailable,
         platform: process.platform,
         appVersion: app.getVersion(),
+        update: state.updates?.state() ?? { method: "source", status: "idle" },
     };
 }
 
@@ -871,6 +892,7 @@ function registerIpc(): void {
         state.problems = checked.problems;
         saveSettings(state.configPath, state.settings);
         applyDesktopSettings(before);
+        state.updates?.reschedule();
 
         if (!sameAddress(before.server.url, state.settings.server.url)) {
             state.probe = undefined;
@@ -931,6 +953,10 @@ function registerIpc(): void {
             void shell.openExternal(LINKS[target]);
         }
     });
+
+    handle("config:check-updates", () => gui!.updates?.check(true));
+
+    handle("config:update-action", () => gui!.updates?.act());
 
     handle("config:show-file", () => {
         const state = gui!;

@@ -15,6 +15,8 @@ const api: GuiConfigApi = {
     retryNow: () => ipcRenderer.invoke("config:retry") as Promise<void>,
     openExternal: (target) => ipcRenderer.invoke("config:open-external", target) as Promise<void>,
     showConfigFile: () => ipcRenderer.invoke("config:show-file") as Promise<void>,
+    checkUpdates: () => ipcRenderer.invoke("config:check-updates") as Promise<void>,
+    updateAction: () => ipcRenderer.invoke("config:update-action") as Promise<void>,
     onState: (listener) => {
         const handler = (_event: unknown, state: ConfigState) => {
             listener(state);

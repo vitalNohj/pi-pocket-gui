@@ -42,6 +42,8 @@ export interface DesktopHost {
     toggleWindow: () => void;
     openSettings: () => void;
     quit: () => void;
+    /** A tray line for the app's own update, when there is one to take. */
+    updateItem: () => { label: string; click: () => void } | undefined;
 }
 
 function originOf(url: string): string | undefined {
@@ -131,8 +133,10 @@ export function setUpDesktop(host: DesktopHost): {
             toolTip: pin.label,
             click: () => open(pin.url),
         }));
+        const update = host.updateItem();
         const template: MenuItemConstructorOptions[] = [
             { label: badge > 0 ? `Open Pi Pocket  (${badge} need you)` : "Open Pi Pocket", click: host.showWindow },
+            ...(update === undefined ? [] : [{ label: update.label, click: update.click }]),
             ...(pinItems.length > 0
                 ? [{ type: "separator" as const }, { label: "Pinned", enabled: false }, ...pinItems]
                 : []),

@@ -126,3 +126,67 @@ test("the dot paints opaque in its middle and leaves the far corner alone", () =
     assert.equal(overlay[(8 * 16 + 8) * 4 + 3], 255);
     assert.equal(overlay[3], 0);
 });
+
+test("an update reaches each kind of install its own way", async () => {
+    const { updateMethod } = await import("../main/update-pick");
+
+    assert.equal(updateMethod("darwin", { packaged: true, appImage: false, teamSigned: false }), "download");
+    assert.equal(updateMethod("darwin", { packaged: true, appImage: false, teamSigned: true }), "install");
+    assert.equal(updateMethod("win32", { packaged: true, appImage: false, teamSigned: false }), "install");
+    assert.equal(updateMethod("linux", { packaged: true, appImage: true, teamSigned: false }), "install");
+    assert.equal(updateMethod("linux", { packaged: true, appImage: false, teamSigned: false }), "page");
+    assert.equal(updateMethod("darwin", { packaged: false, appImage: false, teamSigned: true }), "source");
+});
+
+test("versions compare as numbers, and pre-releases are never newer", async () => {
+    const { isNewer } = await import("../main/update-pick");
+
+    assert.equal(isNewer("v0.1.10", "0.1.9"), true);
+    assert.equal(isNewer("0.2.0", "0.10.0"), false);
+    assert.equal(isNewer("0.1.0", "0.1.0"), false);
+    assert.equal(isNewer("0.2.0-beta.1", "0.1.0"), false);
+});
+
+test("a release is read with its Mac images and checksums; drafts and pre-releases are skipped", async () => {
+    const { macImage, readRelease, safeFileName, sha256Of } = await import("../main/update-pick");
+    const hex = "a".repeat(64);
+    const release = readRelease({
+        tag_name: "v0.2.0",
+        html_url: "https://github.com/vitalNohj/pi-pocket-gui/releases/tag/v0.2.0",
+        assets: [
+            { name: "pi-pocket-gui-0.2.0-mac-arm64.dmg", browser_download_url: "https://x/arm.dmg", size: 10, digest: `sha256:${hex}` },
+            { name: "pi-pocket-gui-0.2.0-mac-x64.dmg", browser_download_url: "https://x/x64.dmg", size: 11 },
+            { name: "pi-pocket-gui-0.2.0-mac-arm64.dmg.blockmap", browser_download_url: "https://x/b", size: 1 },
+        ],
+    });
+
+    assert.equal(release?.version, "0.2.0");
+    assert.equal(macImage(release!, "arm64")?.url, "https://x/arm.dmg");
+    assert.equal(macImage(release!, "x64")?.url, "https://x/x64.dmg");
+    assert.equal(sha256Of(macImage(release!, "arm64")!), hex);
+    assert.equal(sha256Of(macImage(release!, "x64")!), undefined);
+    assert.equal(readRelease({ tag_name: "v0.3.0", html_url: "h", prerelease: true }), undefined);
+    assert.equal(readRelease({ tag_name: "v0.3.0", html_url: "h", draft: true }), undefined);
+    assert.equal(safeFileName("../../evil name.dmg"), "evil_name.dmg");
+    assert.equal(safeFileName("..."), "pi-pocket-gui-update.dmg");
+});
+
+test("a download keeps its name only when its checksum matches", async () => {
+    const { mkdtempSync, existsSync, readdirSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { createHash } = await import("node:crypto");
+    const { downloadChecked } = await import("../main/download");
+    const folder = mkdtempSync(join(tmpdir(), "gui-dl-"));
+    const body = "disk image bytes";
+    const good = createHash("sha256").update(body).digest("hex");
+    const fetch = async () => new Response(body, { headers: { "content-length": String(body.length) } });
+    const seen: number[] = [];
+    const path = await downloadChecked({ url: "u", name: "a.dmg", folder, sha256: good, fetch, onProgress: (p) => seen.push(p) });
+
+    assert.equal(existsSync(path), true);
+    assert.equal(seen.at(-1), 100);
+    await assert.rejects(downloadChecked({ url: "u", name: "b.dmg", folder, sha256: "0".repeat(64), fetch }), /checksum/);
+    assert.deepEqual(readdirSync(folder).sort(), ["a.dmg"]);
+    await assert.rejects(downloadChecked({ url: "u", name: "c.dmg", folder, fetch: async () => new Response("", { status: 404 }) }), /404/);
+});
