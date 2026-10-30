@@ -13,8 +13,6 @@
 import type { BaseWindow, WebContents, WebContentsView } from "electron";
 import type { Settings, TranslucencySupport } from "../shared/types";
 
-/** The window's color when it is solid: Pi Pocket's default ground, so nothing flashes white before a page paints. */
-export const SOLID = "#1a1b26";
 const CLEAR = "#00000000";
 
 /** Windows 11 22H2, the first build with backdrop materials for apps. */
@@ -96,6 +94,8 @@ export interface AppearanceHost {
     onServerOrigin: () => boolean;
     /** Linux: whether the window was made see-through at start. */
     translucentAtStart: boolean;
+    /** The window's color when solid: Pi Pocket's ground in its theme now, so nothing flashes another color. */
+    solid: () => string;
 }
 
 export function setUpAppearance(host: AppearanceHost): {
@@ -104,6 +104,8 @@ export function setUpAppearance(host: AppearanceHost): {
     apply: (settings: Settings) => void;
     /** The server's page loaded: give it the CSS again (a load drops what was inserted). */
     pageLoaded: () => void;
+    /** The theme's ground changed: the solid window takes it. */
+    themeChanged: () => void;
 } {
     const support = () => translucencySupport(host.platform, host.systemVersion, host.translucentAtStart);
     let current: Settings["appearance"] | undefined;
@@ -115,7 +117,7 @@ export function setUpAppearance(host: AppearanceHost): {
 
     function applyWindow(): void {
         const translucent = on();
-        const color = translucent ? CLEAR : SOLID;
+        const color = translucent ? CLEAR : host.solid();
 
         if (host.platform === "darwin") {
             host.window.setVibrancy(translucent ? (current?.macMaterial ?? "under-window") : null);
@@ -172,6 +174,7 @@ export function setUpAppearance(host: AppearanceHost): {
             applyWindow();
             applyPage();
         },
+        themeChanged: applyWindow,
         pageLoaded: () => {
             // A new document has none of what was inserted into the last one.
             queue = queue.then(() => {

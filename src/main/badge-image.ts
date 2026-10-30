@@ -34,6 +34,20 @@ export function paintDot(
     }
 }
 
+/**
+ * Color a white mask (the tray's π, assets/tray-pi-*.png) in place: each pixel keeps its coverage and takes the color.
+ * The bitmap is premultiplied, so a pixel's channels are the color scaled by its alpha.
+ */
+export function tint(bitmap: Buffer, color: { r: number; g: number; b: number }): void {
+    for (let at = 0; at + 3 < bitmap.length; at += 4) {
+        const alpha = (bitmap[at + 3] ?? 0) / 255;
+
+        bitmap[at] = Math.round(color.b * alpha);
+        bitmap[at + 1] = Math.round(color.g * alpha);
+        bitmap[at + 2] = Math.round(color.r * alpha);
+    }
+}
+
 /** A dot in the icon's lower right corner, a little under half its size, as badges sit. */
 export function cornerDot(width: number, height: number): { cx: number; cy: number; radius: number } {
     const radius = Math.min(width, height) * 0.22;

@@ -40,6 +40,9 @@ A value that is not valid falls back to its default, and the settings screen lis
 
 ### Appearance
 
+The settings screen, the window's background, and the tray's π take Pi Pocket's colors from the theme its page shows, and follow when you change it there. The app keeps them (`theme.json` beside `config.json`), so the next start looks the same before the server answers.
+
+
 **See-through background** lets the desktop show through Pi Pocket's background, blurred; **Opacity** sets how much. Menus, sheets, and cards stay solid, so text stays readable.
 
 - **macOS:** the system's blur (vibrancy). **Blur** picks its material.

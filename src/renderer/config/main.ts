@@ -212,8 +212,21 @@ element("update-action").addEventListener("click", () => {
     void gui.updateAction();
 });
 
+/** Pi Pocket's colors, as its page shows them: this screen looks like the Pi Pocket it opens. */
+function renderTheme(next: ConfigState): void {
+    const root = document.documentElement;
+
+    for (const [token, value] of Object.entries(next.theme.colors)) {
+        root.style.setProperty(`--${token}`, value);
+    }
+
+    root.dataset.mode = next.theme.mode;
+    root.dataset.ready = "";
+}
+
 function render(next: ConfigState): void {
     state = next;
+    renderTheme(next);
     element("app-version").textContent = next.appVersion;
     renderUpdate(next);
     element("config-path").textContent = next.configPath;

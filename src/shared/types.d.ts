@@ -135,6 +135,8 @@ export interface ConfigState {
     translucency: TranslucencySupport;
     /** Linux: the window was made see-through at start (turning it on takes a restart; off works at once). */
     translucentAtStart: boolean;
+    /** Pi Pocket's colors, the last the server's page showed (or the default before any). */
+    theme: ThemeColors;
     platform: string;
     appVersion: string;
 }
@@ -178,6 +180,29 @@ export type HostEvent =
     | { type: "visibility"; visible: boolean }
     | { type: "open"; url: string }
     | { type: "approve"; id: string; allow: boolean };
+
+/** Pi Pocket's theme tokens the app takes (src/main/theme.ts). */
+export type ThemeToken =
+    | "desk"
+    | "bg"
+    | "card"
+    | "text"
+    | "body"
+    | "muted"
+    | "accent"
+    | "accent-fill"
+    | "accent-ink"
+    | "brand"
+    | "ok"
+    | "warn"
+    | "err"
+    | "code-bg";
+
+/** Pi Pocket's colors as its page shows them: each token as #rrggbb (or #rrggbbaa), and dark or light. */
+export interface ThemeColors {
+    mode: "dark" | "light";
+    colors: Record<ThemeToken, string>;
+}
 
 /** What the server page's preload learns when it starts: whether it may offer the bridge, and the window's state. */
 export interface HostHello {

@@ -19,8 +19,9 @@ import {
     type Tray,
     type WebContents,
 } from "electron";
-import type { HostEvent, HostHello, HostNotification, PinnedSession, Settings } from "../shared/types";
-import { cornerDot, dotBitmap, paintDot } from "./badge-image";
+import type { HostEvent, HostHello, HostNotification, PinnedSession, Settings, ThemeColors } from "../shared/types";
+import { cornerDot, dotBitmap, paintDot, tint } from "./badge-image";
+import { readTheme, rgbOf } from "./theme";
 import { pinLabel, readBadge, readNotification, readPinned } from "./bridge-input";
 import { offersAllow, showCall } from "./notice-text";
 
@@ -44,6 +45,10 @@ export interface DesktopHost {
     quit: () => void;
     /** A tray line for the app's own update, when there is one to take. */
     updateItem: () => { label: string; click: () => void } | undefined;
+    /** Pi Pocket's colors now: the tray's π takes the brand color. */
+    theme: () => ThemeColors;
+    /** The server's page shows other colors. */
+    themeChanged: (theme: ThemeColors) => void;
 }
 
 function originOf(url: string): string | undefined {
@@ -59,7 +64,7 @@ const shown = new Map<string, Notification>();
 let pins: PinnedSession[] = [];
 let badge = 0;
 let lastVisible: boolean | undefined;
-let trayIcons: { plain: NativeImage; dot: NativeImage } | undefined;
+let trayIcons: { plain: NativeImage; dot: NativeImage; brand: string; dotColor: string } | undefined;
 
 export function setUpDesktop(host: DesktopHost): {
     /** The window was shown, hidden, minimized, restored, or the view changed: tell the page if that changed. */
@@ -102,21 +107,28 @@ export function setUpDesktop(host: DesktopHost): {
         }
     };
 
+    /** The tray's π, as the rail of Pi Pocket's page draws it, in the theme's brand color; with a dot when sessions need you. */
     const icons = (): { plain: NativeImage; dot: NativeImage } => {
-        if (trayIcons !== undefined) {
+        const colors = host.theme().colors;
+
+        if (trayIcons !== undefined && trayIcons.brand === colors.brand && trayIcons.dotColor === colors.err) {
             return trayIcons;
         }
 
-        const size = process.platform === "darwin" ? 18 : 22;
-        const plain = nativeImage.createFromPath(join(host.assets, "icon-192.png")).resize({ width: size * 2, height: size * 2 });
-        const { width, height } = plain.getSize();
-        const pixels = Buffer.from(plain.toBitmap());
+        // 18 points in macOS's menu bar, 22 in other trays; drawn at twice that for sharp screens.
+        const mask = nativeImage.createFromPath(join(host.assets, process.platform === "darwin" ? "tray-pi-36.png" : "tray-pi-44.png"));
+        const { width, height } = mask.getSize();
+        const pixels = Buffer.from(mask.toBitmap());
 
-        paintDot(pixels, width, height, cornerDot(width, height));
+        tint(pixels, rgbOf(colors.brand));
+
+        const plain = nativeImage.createFromBitmap(Buffer.from(pixels), { width, height, scaleFactor: 2 });
+
+        paintDot(pixels, width, height, cornerDot(width, height), rgbOf(colors.err));
 
         const dot = nativeImage.createFromBitmap(pixels, { width, height, scaleFactor: 2 });
 
-        trayIcons = { plain: nativeImage.createFromBitmap(Buffer.from(plain.toBitmap()), { width, height, scaleFactor: 2 }), dot };
+        trayIcons = { plain, dot, brand: colors.brand, dotColor: colors.err };
 
         return trayIcons;
     };
@@ -252,6 +264,15 @@ export function setUpDesktop(host: DesktopHost): {
 
         if (fromServerPage(event) && message !== undefined) {
             notify(message);
+        }
+    });
+
+    ipcMain.on("host:theme", (event, input: unknown) => {
+        const theme = readTheme(input);
+
+        if (fromServerPage(event) && theme !== undefined) {
+            host.themeChanged(theme);
+            refreshTray();
         }
     });
 

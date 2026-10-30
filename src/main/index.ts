@@ -20,10 +20,11 @@ import {
     type IpcMainInvokeEvent,
     type MenuItemConstructorOptions,
 } from "electron";
-import type { ConfigReason, ConfigState, ProbeResult, Settings, SettingsProblem } from "../shared/types";
+import type { ConfigReason, ConfigState, ProbeResult, Settings, SettingsProblem, ThemeColors } from "../shared/types";
 import { retryDelayMs } from "./backoff";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
-import { SOLID, setUpAppearance } from "./appearance";
+import { setUpAppearance } from "./appearance";
+import { loadTheme, sameTheme, saveTheme } from "./theme";
 import { setUpDesktop } from "./desktop";
 import { setUpUpdates } from "./updates";
 import { setLaunchAtLogin, startedAtLogin, trayAvailable } from "./platform";
@@ -89,6 +90,9 @@ interface Gui {
     appearance: ReturnType<typeof setUpAppearance> | undefined;
     /** Linux: the window was made see-through at start; turning that on needs a new window. */
     translucentAtStart: boolean;
+    /** Pi Pocket's colors, the last its page showed (src/main/theme.ts), and where they are kept. */
+    theme: ThemeColors;
+    themePath: string;
     /** The notice about a server without the bridge was shown in this run. */
     toldNoBridge: boolean;
 }
@@ -105,6 +109,9 @@ async function start(): Promise<void> {
     const placed = loadWindowState(statePath);
     // Linux makes a window see-through only when it is made; macOS and Windows change it at any time.
     const translucentAtStart = process.platform === "linux" && loaded.settings.appearance.translucent;
+    const themePath = join(app.getPath("userData"), "theme.json");
+    const theme = loadTheme(themePath);
+    const solid = theme.colors.bg;
 
     const window = new BaseWindow({
         title: "Pi Pocket",
@@ -114,7 +121,7 @@ async function start(): Promise<void> {
         minWidth: 360,
         minHeight: 480,
         show: false,
-        backgroundColor: SOLID,
+        backgroundColor: solid,
         ...(translucentAtStart ? { transparent: true } : {}),
         icon: join(ASSETS, "icon-512.png"),
         autoHideMenuBar: !loaded.settings.window.showMenuBar,
@@ -154,8 +161,8 @@ async function start(): Promise<void> {
         },
     });
 
-    server.setBackgroundColor(SOLID);
-    config.setBackgroundColor(SOLID);
+    server.setBackgroundColor(solid);
+    config.setBackgroundColor(solid);
     window.contentView.addChildView(server);
     window.contentView.addChildView(config);
 
@@ -182,6 +189,8 @@ async function start(): Promise<void> {
         updates: undefined,
         appearance: undefined,
         translucentAtStart,
+        theme,
+        themePath,
         toldNoBridge: false,
     };
 
@@ -193,6 +202,7 @@ async function start(): Promise<void> {
         server: server.webContents,
         onServerOrigin: () => originOf(server.webContents.getURL()) === currentOrigin(),
         translucentAtStart,
+        solid: () => gui!.theme.colors.bg,
     });
 
     gui.updates = setUpUpdates({
@@ -235,6 +245,19 @@ async function start(): Promise<void> {
         openSettings,
         quit,
         updateItem: () => gui?.updates?.trayItem(),
+        theme: () => gui!.theme,
+        themeChanged: (next) => {
+            const state = gui!;
+
+            if (sameTheme(state.theme, next)) {
+                return;
+            }
+
+            state.theme = next;
+            saveTheme(state.themePath, next);
+            state.appearance?.themeChanged();
+            pushConfigState();
+        },
     });
 
     for (const change of ["show", "hide", "minimize", "restore", "focus"] as const) {
@@ -414,6 +437,7 @@ function configState(): ConfigState {
         trayAvailable: state.trayAvailable,
         translucency: state.appearance?.support() ?? { kind: "unsupported", message: "" },
         translucentAtStart: state.translucentAtStart,
+        theme: state.theme,
         platform: process.platform,
         appVersion: app.getVersion(),
         update: state.updates?.state() ?? { method: "source", status: "idle" },

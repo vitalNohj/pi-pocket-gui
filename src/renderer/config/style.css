@@ -5,6 +5,12 @@
     font-weight: 100 900;
 }
 
+/* Gelasio stands in for Georgia, the serif of Pi Pocket's π mark, where Georgia is missing (Linux). */
+@font-face {
+    font-family: "Gelasio";
+    src: url("fonts/Gelasio.woff2") format("woff2");
+}
+
 @font-face {
     font-family: "JetBrains Mono";
     src: url("fonts/JetBrainsMono.woff2") format("woff2");
@@ -12,28 +18,27 @@
 }
 
 :root {
-    --o-bg: #1a1b26;
-    --o-bg-dark: #13141c;
-    --o-bg-darker: #0e0e14;
-    --o-fg: #a9b1d6;
-    --o-fg-bright: #c0caf5;
-    --o-accent: #7aa2f7;
-    --o-red: #f7768e;
-    --o-yellow: #e0af68;
-    --o-orange: #ff9e64;
-    --o-green: #9ece6a;
+    /* Pi Pocket's own token names (its theme surface). The app sets them inline from the theme the server's page shows
+     * (src/main/theme.ts); these are its default, Tokyo Night, for before any server has. */
+    --desk: #0e0e14;
+    --bg: #1a1b26;
+    --card: #202230;
+    --text: #c0caf5;
+    --body: #a9b1d6;
+    --muted: #878ca9;
+    --accent: #7aa2f7;
+    --accent-fill: #7aa2f7;
+    --accent-ink: #1a1b26;
+    --brand: #eb927b;
+    --ok: #9ece6a;
+    --warn: #e0af68;
+    --err: #f7768e;
+    --code-bg: #13141c;
 
-    --bg: var(--o-bg);
-    --desk: var(--o-bg-darker);
-    --card: color-mix(in srgb, var(--o-fg) 4%, var(--bg));
-    --card-2: color-mix(in srgb, var(--o-fg) 8%, var(--bg));
-    --hover: color-mix(in srgb, var(--o-fg) 7%, transparent);
-    --hair: color-mix(in srgb, var(--o-fg) 10%, transparent);
-    --hair-2: color-mix(in srgb, var(--o-fg) 17%, transparent);
-    --text: var(--o-fg-bright);
-    --body: var(--o-fg);
-    --muted: color-mix(in oklab, var(--o-fg) 76%, var(--bg));
-    --accent: var(--o-accent);
+    --card-2: color-mix(in srgb, var(--body) 8%, var(--bg));
+    --hover: color-mix(in srgb, var(--body) 7%, transparent);
+    --hair: color-mix(in srgb, var(--body) 10%, transparent);
+    --hair-2: color-mix(in srgb, var(--body) 17%, transparent);
     --radius: 12px;
     --radius-sm: 8px;
     --sans: "Geist", system-ui, sans-serif;
@@ -41,8 +46,17 @@
     color-scheme: dark;
 }
 
+:root[data-mode="light"] {
+    color-scheme: light;
+}
+
 * {
     box-sizing: border-box;
+}
+
+/* Until the first state arrives with Pi Pocket's colors, show only the window's ground, which already has them. */
+html:not([data-ready]) body {
+    visibility: hidden;
 }
 
 /* The hidden attribute wins over a display set below (.fields, .card). */
@@ -58,12 +72,12 @@ body {
 }
 
 html {
-    background: var(--desk);
+    background: var(--page-ground, var(--desk));
 }
 
 /* A see-through window (Appearance): the desk and the cards let the desktop through, by the opacity chosen. */
 :root[data-translucent="on"] {
-    --desk: color-mix(in srgb, var(--o-bg-darker) calc(var(--opacity) - 35%), transparent);
+    --page-ground: color-mix(in srgb, var(--desk) calc(var(--opacity) - 35%), transparent);
     --ground: color-mix(in srgb, var(--bg) var(--opacity), transparent);
 }
 
@@ -138,7 +152,7 @@ code {
 }
 
 .error {
-    color: var(--o-red);
+    color: var(--err);
 }
 
 .brand {
@@ -151,8 +165,17 @@ code {
     flex: 1;
 }
 
+/* Pi Pocket's π, as its rail draws it: a serif glyph in the theme's brand color. */
 .logo {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
     border-radius: 10px;
+    background: var(--card);
+    border: 1px solid var(--hair);
+    font: 30px/1 Georgia, "Gelasio", serif;
+    color: var(--brand);
 }
 
 .card {
@@ -167,6 +190,10 @@ code {
 .connection {
     border-color: var(--hair-2);
     box-shadow: 0 8px 28px rgb(0 0 0 / 28%);
+}
+
+:root[data-mode="light"] .connection {
+    box-shadow: 0 6px 22px rgb(40 40 70 / 12%);
 }
 
 .card-head {
@@ -186,11 +213,11 @@ code {
 }
 
 .pill[data-state="detected"] {
-    color: var(--o-green);
+    color: var(--ok);
 }
 
 .pill[data-state="not-detected"] {
-    color: var(--o-red);
+    color: var(--err);
 }
 
 .pill[data-state="checking"] {
@@ -198,14 +225,14 @@ code {
 }
 
 .pill[data-state="other"] {
-    color: var(--o-yellow);
+    color: var(--warn);
 }
 
 .banner {
     border-radius: var(--radius);
     padding: 12px 16px;
-    border: 1px solid color-mix(in srgb, var(--o-red) 50%, transparent);
-    background: color-mix(in srgb, var(--o-red) 10%, var(--bg));
+    border: 1px solid color-mix(in srgb, var(--err) 50%, transparent);
+    background: color-mix(in srgb, var(--err) 10%, var(--bg));
     color: var(--text);
 }
 
@@ -321,12 +348,12 @@ button.small {
 }
 
 button.primary {
-    background: var(--accent);
-    color: var(--o-bg-dark);
+    background: var(--accent-fill);
+    color: var(--accent-ink);
 }
 
 button.primary:hover {
-    background: color-mix(in srgb, var(--accent) 88%, white);
+    background: color-mix(in srgb, var(--accent-fill) 88%, white);
 }
 
 button.secondary {
@@ -369,11 +396,12 @@ button:disabled {
 }
 
 .command {
+    /* The code block's ground, as in Pi Pocket. */
     display: flex;
     margin-top: 6px;
     align-items: center;
     gap: 10px;
-    background: var(--desk);
+    background: var(--code-bg);
     border: 1px solid var(--hair);
     border-radius: var(--radius-sm);
     padding: 8px 10px;
@@ -383,7 +411,7 @@ button:disabled {
 .command code {
     flex: 1;
     white-space: nowrap;
-    color: var(--o-green);
+    color: var(--ok);
 }
 
 .settings {
@@ -491,7 +519,7 @@ input[type="checkbox"]:checked::after {
 }
 
 .problems {
-    border-color: color-mix(in srgb, var(--o-yellow) 45%, transparent);
+    border-color: color-mix(in srgb, var(--warn) 45%, transparent);
 }
 
 .problems ul {
