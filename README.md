@@ -104,15 +104,9 @@ Pi Pocket's page runs in the app as it does in a browser, with one addition: a s
 
 ## Roadmap
 
-> [!IMPORTANT]
-> **Remote execution is being designed, not built.** Nothing below is in the app yet.
+Being worked on, none of it in the app yet:
 
-The idea: a session whose tools (files, commands, git) run on **this** computer, while the agent, its model, its keys, and the history stay on the server. You would pick **Remote** in Pi Pocket's New session sheet, then a computer and a folder on it.
-
-The plan is for the app to run a small helper, built from the same Pi Pocket code the server runs, that connects out to the server (no open ports) and carries out the requests of the sessions you allow. A session waits while the computer is asleep or offline, and never runs the step on the server instead. The design, the open questions, and estimates are in [docs/remote/plan.md](docs/remote/plan.md).
-
-Also planned:
-
+- **Remote execution:** sessions on your server whose files and commands are on this computer.
 - **New session from anywhere:** ⌘N / Ctrl+N, the dock's or taskbar's menu, and a `pi-pocket://new` link.
 - **Offline dictation:** speech to text on this computer, for Pi Pocket's microphone button.
 - **Signed builds** for macOS and Windows, so updates install themselves everywhere.
