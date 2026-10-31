@@ -269,14 +269,17 @@ function rgb(hex: string): [number, number, number] {
     return [parseInt(value.slice(0, 2), 16), parseInt(value.slice(2, 4), 16), parseInt(value.slice(4, 6), 16)];
 }
 
-/** Windows reports its accent as #AARRGGBB. Anything else falls back to the accent Windows 11 uses. */
+/**
+ * Electron reports the accent as RRGGBBAA (systemPreferences.getAccentColor), eight hex digits with the alpha last.
+ * Anything else falls back to the accent Windows 11 uses.
+ */
 export function readAccent(value: unknown): string {
     if (typeof value !== "string") {
         return "#0067c0";
     }
 
     const hex = value.replace("#", "");
-    const rgb = hex.length === 8 ? hex.slice(2) : hex.length === 6 ? hex : undefined;
+    const rgb = hex.length === 8 ? hex.slice(0, 6) : hex.length === 6 ? hex : undefined;
 
     return rgb !== undefined && /^[0-9a-f]{6}$/i.test(rgb) ? `#${rgb.toLowerCase()}` : "#0067c0";
 }

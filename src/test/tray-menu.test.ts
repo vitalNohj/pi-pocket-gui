@@ -161,8 +161,9 @@ test("the Windows look follows the Windows theme; the Pi Pocket look follows the
     assert.match(themed.font, /Geist/);
 });
 
-test("Windows' accent arrives as #AARRGGBB and falls back when it is unusable", () => {
-    assert.equal(readAccent("#FF0067C0"), "#0067c0");
+test("Windows' accent arrives as RRGGBBAA, so the trailing alpha is dropped", () => {
+    assert.equal(readAccent("0067c0ff"), "#0067c0");
+    assert.equal(readAccent("#0067C0FF"), "#0067c0");
     assert.equal(readAccent("#112233"), "#112233");
     assert.equal(readAccent("blue"), "#0067c0");
     assert.equal(readAccent(undefined), "#0067c0");
