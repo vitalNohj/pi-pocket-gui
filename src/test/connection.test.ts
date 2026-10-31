@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { mayConnect, pageProblem } from "../main/connection";
+import { mayConnect, NavigationResponses, pageProblem } from "../main/connection";
 import type { ProbeResult } from "../shared/types";
 
 const detected: ProbeResult = { kind: "detected", url: "http://localhost:8787", bridge: 1, via: "info" };
@@ -35,6 +35,46 @@ test("HTML pages and intermediate redirects are not mistaken for errors", () => 
     assert.equal(pageProblem(200, "application/xhtml+xml"), undefined);
     assert.equal(pageProblem(200, ""), undefined);
     assert.equal(pageProblem(302, "application/json"), undefined);
+});
+
+test("attachment headers without a navigation commit do not fail the existing page", () => {
+    const navigation = new NavigationResponses();
+
+    for (const type of ["application/zip", "application/octet-stream", "application/json", "image/png", "application/pdf"]) {
+        navigation.started();
+        assert.equal(navigation.received("https://example.com/download", type), undefined);
+        // The download does not commit. The next real document must not inherit its content type.
+        navigation.started();
+        navigation.received("https://example.com/pocket", "text/html");
+        assert.equal(navigation.committed("https://example.com/pocket", 200), undefined);
+    }
+});
+
+test("only a matching committed response applies its MIME type, including URLs with fragments", () => {
+    const navigation = new NavigationResponses();
+
+    navigation.received("https://example.com/json", "application/json");
+    assert.equal(navigation.committed("https://example.com/other", 200), undefined);
+    navigation.received("https://example.com/json", "application/json");
+    assert.match(navigation.committed("https://example.com/json#pretty", 200) ?? "", /application\/json/);
+});
+
+test("redirect and aborted-download metadata does not contaminate the next document", () => {
+    const navigation = new NavigationResponses();
+
+    navigation.received("https://example.com/start", "application/json");
+    navigation.received("https://example.com/login", "text/html");
+    assert.equal(navigation.committed("https://example.com/login", 200), undefined);
+    navigation.received("https://example.com/same", "application/octet-stream");
+    navigation.started();
+    navigation.received("https://example.com/same", "text/html");
+    assert.equal(navigation.committed("https://example.com/same", 200), undefined);
+});
+
+test("committed HTTP failures still recover even if no response metadata is available", () => {
+    const navigation = new NavigationResponses();
+
+    assert.match(navigation.committed("https://example.com/error", 503) ?? "", /HTTP 503/);
 });
 
 test("an explicitly opened gateway may serve its sign-in form with HTTP 401 or 403", () => {

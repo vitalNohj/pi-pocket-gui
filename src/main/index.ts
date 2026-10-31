@@ -22,7 +22,7 @@ import {
 } from "electron";
 import type { ConfigReason, ConfigState, ProbeResult, Settings, SettingsProblem, ThemeColors, TitleBarStyle } from "../shared/types";
 import { retryDelayMs } from "./backoff";
-import { mayConnect, pageProblem } from "./connection";
+import { mayConnect, NavigationResponses } from "./connection";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
 import { setUpAppearance } from "./appearance";
 import { setUpTitleBar, titleBarOptions } from "./titlebar";
@@ -577,22 +577,24 @@ function connect(url: string, unverified = false): void {
 function watchServerView(): void {
     const contents = gui!.server.webContents;
 
-    // HTTP error pages and JSON are successful Chromium navigations: did-fail-load never catches them.
-    contents.session.webRequest.onResponseStarted((details) => {
-        if (gui === undefined || gui.loadedUrl === undefined || details.webContentsId !== contents.id || details.resourceType !== "mainFrame") {
-            return;
+    const responses = new NavigationResponses();
+    const contentsId = contents.id;
+
+    contents.on("did-start-navigation", (details) => {
+        if (details.isMainFrame && !details.isSameDocument) {
+            responses.started();
+        }
+    });
+
+    // Record before commitment, but do not change UI here: an attachment has headers yet never replaces the page.
+    contents.session.webRequest.onHeadersReceived((details, callback) => {
+        if (details.webContentsId === contentsId && details.resourceType === "mainFrame") {
+            const type = Object.entries(details.responseHeaders ?? {}).find(([name]) => name.toLowerCase() === "content-type")?.[1][0] ?? "";
+
+            responses.received(details.url, type);
         }
 
-        const type = Object.entries(details.responseHeaders ?? {}).find(([name]) => name.toLowerCase() === "content-type")?.[1][0] ?? "";
-        const message = pageProblem(details.statusCode, type, gui.unverified);
-
-        if (message !== undefined) {
-            gui.loadedUrl = undefined;
-            gui.unverified = false;
-            stopHealth();
-            stopRetry();
-            showConfig({ kind: "load-failed", url: gui.settings.server.url, message });
-        }
+        callback({});
     });
 
     // These belong to the app, not to the server's HTML, CSS, or keyboard handlers.
@@ -640,9 +642,18 @@ function watchServerView(): void {
         }
     });
 
-    // A new page in the view: what the last one said (pins, badge) no longer holds, and the new one says it again.
-    contents.on("did-navigate", () => {
+    // Only a committed main-frame navigation replaces the page. Downloads and subresource errors leave it alone.
+    contents.on("did-navigate", (_event, url, status) => {
         gui?.desktop?.reset();
+        const message = responses.committed(url, status, gui?.unverified ?? false);
+
+        if (gui !== undefined && gui.loadedUrl !== undefined && message !== undefined) {
+            gui.loadedUrl = undefined;
+            gui.unverified = false;
+            stopHealth();
+            stopRetry();
+            showConfig({ kind: "load-failed", url: gui.settings.server.url, message });
+        }
     });
 
     contents.on("did-finish-load", () => {
