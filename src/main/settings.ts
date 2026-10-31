@@ -5,6 +5,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute } from "node:path";
 import type { Settings, SettingsProblem } from "../shared/types";
+import { modelById } from "./dictation-catalog";
 import { normalizeServerUrl } from "./url";
 
 export const DEFAULT_SERVER_URL = "http://127.0.0.1:8787";
@@ -38,6 +39,7 @@ export function defaultSettings(): Settings {
         updates: { check: true, intervalHours: 6 },
         local: { folder: "", port: 8787, access: "local", data: "", keepUpdated: true },
         appearance: { translucent: false, opacity: 82, macMaterial: "under-window", windowsMaterial: "acrylic", trayMenu: "windows" },
+        dictation: { model: "", live: true },
     };
 }
 
@@ -161,6 +163,10 @@ const schema: { [S in keyof Settings]: { [K in keyof Settings[S]]: Check<Setting
         macMaterial: oneOf("under-window", "sidebar", "hud", "fullscreen-ui"),
         windowsMaterial: oneOf("acrylic", "mica"),
         trayMenu: oneOf("windows", "theme"),
+    },
+    dictation: {
+        model: (value) => (value === "" || (typeof value === "string" && modelById(value) !== undefined) ? pass(value) : fail("must be a speech model's id")),
+        live: bool,
     },
 };
 

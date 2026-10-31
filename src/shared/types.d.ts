@@ -109,6 +109,47 @@ export interface Settings {
          */
         trayMenu: TrayMenuStyle;
     };
+    dictation: {
+        /** The speech model Pi Pocket's mic button uses, by id (src/main/dictation-catalog.ts); empty: none downloaded. */
+        model: string;
+        /** Show the words while a phrase is spoken (recognises it more than once: more CPU). */
+        live: boolean;
+    };
+}
+
+/** One speech model, as the settings show it. */
+export interface DictationModelState {
+    id: string;
+    name: string;
+    languages: string;
+    note: string;
+    license: string;
+    /** Bytes to download. */
+    size: number;
+    recommended: boolean;
+    installed: boolean;
+    chosen: boolean;
+    /** While it downloads. */
+    download?: { step: string; percent: number };
+}
+
+/** Offline dictation (src/main/dictation.ts). */
+export interface DictationState {
+    /** The speech engine exists for this computer's system and processor. */
+    supported: boolean;
+    status: "idle" | "loading" | "ready" | "listening" | "error";
+    message?: string;
+    /** The engine downloads with the first model and goes with the last. */
+    engine: { installed: boolean; size: number };
+    /** Where the engine and models are kept. */
+    folder: string;
+    models: DictationModelState[];
+    downloading: boolean;
+}
+
+export interface DictationAction {
+    type: "download" | "cancel" | "remove" | "use";
+    id: string;
 }
 
 /** One value in config.json that was not valid and fell back to its default. */
@@ -224,6 +265,7 @@ export interface ConfigState {
     platform: string;
     appVersion: string;
     local: LocalState;
+    dictation: DictationState;
 }
 
 /** What the config page can ask of this computer's Pi Pocket. */
@@ -308,6 +350,8 @@ export interface ThemeColors {
 /** What the server page's preload learns when it starts: whether it may offer the bridge, and the window's state. */
 export interface HostHello {
     visible: boolean;
+    /** Offline dictation can run here: the page's mic button uses it (src/main/dictation.ts). */
+    dictation: boolean;
 }
 
 /** What the config page can ask of the main process. */
@@ -332,5 +376,9 @@ export interface GuiConfigApi {
     local(action: LocalAction): Promise<void>;
     /** A folder picked in the system's dialog, or undefined when cancelled. */
     chooseFolder(start: string): Promise<string | undefined>;
+    dictation(action: DictationAction): Promise<void>;
+    showDictationFolder(): Promise<void>;
+    /** The main process asks to show a section of the settings, such as "dictation". */
+    onFocus(listener: (section: string) => void): () => void;
     onState(listener: (state: ConfigState) => void): () => void;
 }

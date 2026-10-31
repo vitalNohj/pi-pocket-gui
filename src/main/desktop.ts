@@ -16,6 +16,7 @@ import {
     systemPreferences,
     type BaseWindow,
     type IpcMainEvent,
+    type IpcMainInvokeEvent,
     type MenuItemConstructorOptions,
     type NativeImage,
     type Tray,
@@ -53,6 +54,8 @@ export interface DesktopHost {
     theme: () => ThemeColors;
     /** The server's page shows other colors. */
     themeChanged: (theme: ThemeColors) => void;
+    /** Offline dictation has an engine for this computer. */
+    dictation: () => boolean;
 }
 
 function originOf(url: string): string | undefined {
@@ -75,10 +78,12 @@ export function setUpDesktop(host: DesktopHost): {
     visibilityChanged: () => void;
     /** The tray was made, or the desktop's settings changed: draw the tray again. */
     refreshTray: () => void;
+    /** The call came from the server's page: its view, its top frame, on the server's origin. */
+    fromServerPage: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean;
     /** The server view left the server, or loaded again: what its page said no longer holds. */
     reset: () => void;
 } {
-    const fromServerPage = (event: IpcMainEvent): boolean => {
+    const fromServerPage = (event: IpcMainEvent | IpcMainInvokeEvent): boolean => {
         const frame = event.senderFrame;
 
         return (
@@ -298,7 +303,7 @@ export function setUpDesktop(host: DesktopHost): {
     ipcMain.on("host:hello", (event) => {
         // Only the server view's top frame on the server's origin gets the bridge: never a frame, another window, or a
         // sign-in page in front of the server.
-        const hello: HostHello | null = fromServerPage(event) ? { visible: visible() } : null;
+        const hello: HostHello | null = fromServerPage(event) ? { visible: visible(), dictation: host.dictation() } : null;
 
         event.returnValue = hello;
     });
@@ -351,6 +356,7 @@ export function setUpDesktop(host: DesktopHost): {
             }
         },
         refreshTray,
+        fromServerPage,
         reset: () => {
             pins = [];
 

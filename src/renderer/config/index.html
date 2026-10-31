@@ -237,6 +237,20 @@
                         </div>
                     </details>
 
+                    <details class="card" id="dictation-card">
+                        <summary><h2>Dictation</h2></summary>
+                        <div class="rows">
+                            <p class="row-note" id="dictation-note">Pi Pocket's mic button, recognised on this computer: the audio never leaves it. Download a speech model to use it; nothing is downloaded until you do. The speech engine (<span id="dictation-engine-size"></span>) comes with the first model and goes with the last.</p>
+                            <p class="row-note error" id="dictation-message" hidden></p>
+                            <div id="dictation-models" class="models"></div>
+                            <label class="row"><span><strong>Words as you speak</strong><small>Shows each phrase while it is spoken, then corrects it when it ends. Uses more CPU.</small></span><input type="checkbox" data-key="dictation.live" /></label>
+                            <div class="row">
+                                <span><strong>Where models are kept</strong><small id="dictation-folder"></small></span>
+                                <button type="button" class="secondary" id="dictation-show-folder">Show</button>
+                            </div>
+                        </div>
+                    </details>
+
                     <details class="card">
                         <summary><h2>Notifications</h2></summary>
                         <div class="rows">

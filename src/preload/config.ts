@@ -21,6 +21,19 @@ const api: GuiConfigApi = {
     relaunch: () => ipcRenderer.invoke("config:relaunch") as Promise<void>,
     local: (action) => ipcRenderer.invoke("config:local", action) as Promise<void>,
     chooseFolder: (start: string) => ipcRenderer.invoke("config:choose-folder", start) as Promise<string | undefined>,
+    dictation: (action) => ipcRenderer.invoke("config:dictation", action) as Promise<void>,
+    showDictationFolder: () => ipcRenderer.invoke("config:show-dictation-folder") as Promise<void>,
+    onFocus: (listener) => {
+        const handler = (_event: unknown, section: string) => {
+            listener(section);
+        };
+
+        ipcRenderer.on("config:focus", handler);
+
+        return () => {
+            ipcRenderer.removeListener("config:focus", handler);
+        };
+    },
     onState: (listener) => {
         const handler = (_event: unknown, state: ConfigState) => {
             listener(state);
