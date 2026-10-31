@@ -92,7 +92,7 @@ export function setUpTrayPopup(host: TrayPopupHost): {
             const at = placeTrayMenu({
                 icon,
                 menu: { width: WIDTH, height },
-                screens: screen.getAllDisplays().map((display) => display.workArea),
+                screens: screen.getAllDisplays().map((display) => ({ bounds: display.bounds, workArea: display.workArea })),
                 gap: GAP,
                 margin: MARGIN,
             });

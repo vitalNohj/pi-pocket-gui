@@ -2,12 +2,17 @@ import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { buildTrayMenu, placeTrayMenu, readAccent, trayMenuPalette, type ScreenRect } from "../main/tray-menu";
+import { buildTrayMenu, placeTrayMenu, readAccent, trayMenuPalette, type ScreenRect, type TrayScreen } from "../main/tray-menu";
 import { menuPage } from "../main/tray-popup";
 import { defaultSettings, validateSettings } from "../main/settings";
 import type { PinnedSession, ThemeColors } from "../shared/types";
 
-const screen: ScreenRect = { x: 0, y: 0, width: 1920, height: 1080 };
+/** A display whose taskbar takes nothing, so the work area is the whole screen. */
+function display(bounds: ScreenRect, workArea: ScreenRect = bounds): TrayScreen {
+    return { bounds, workArea };
+}
+
+const screen = display({ x: 0, y: 0, width: 1920, height: 1080 });
 const theme: ThemeColors = {
     mode: "dark",
     colors: {
@@ -109,7 +114,7 @@ test("a menu taller than the screen is pinned to the top margin", () => {
 });
 
 test("the menu uses the screen its icon is on", () => {
-    const second: ScreenRect = { x: 1920, y: 0, width: 1280, height: 1024 };
+    const second = display({ x: 1920, y: 0, width: 1280, height: 1024 });
     const place = placeTrayMenu({
         icon: { x: 3000, y: 980, width: 40, height: 40 },
         menu: { width: 264, height: 220 },
@@ -118,8 +123,26 @@ test("the menu uses the screen its icon is on", () => {
         margin: 8,
     });
 
-    assert.ok(place.x >= second.x);
-    assert.ok(place.x + 264 <= second.x + second.width);
+    assert.ok(place.x >= second.bounds.x);
+    assert.ok(place.x + 264 <= second.bounds.x + second.bounds.width);
+});
+
+test("a tray icon on the taskbar is matched by the screen's bounds, then clamped to its work area", () => {
+    // The taskbar is the bottom 48px, so the icon's center is outside the work area but inside the bounds.
+    const second = display(
+        { x: 1920, y: 0, width: 1280, height: 1024 },
+        { x: 1920, y: 0, width: 1280, height: 1024 - 48 },
+    );
+    const place = placeTrayMenu({
+        icon: { x: 3000, y: 992, width: 32, height: 32 },
+        menu: { width: 264, height: 220 },
+        screens: [screen, second],
+        gap: 4,
+        margin: 8,
+    });
+
+    assert.ok(place.x >= second.workArea.x, "stays on the icon's display");
+    assert.ok(place.y + 220 <= second.workArea.y + second.workArea.height, "stays above the taskbar");
 });
 
 test("the Windows look follows the Windows theme; the Pi Pocket look follows the page", () => {
@@ -143,6 +166,26 @@ test("Windows' accent arrives as #AARRGGBB and falls back when it is unusable", 
     assert.equal(readAccent("#112233"), "#112233");
     assert.equal(readAccent("blue"), "#0067c0");
     assert.equal(readAccent(undefined), "#0067c0");
+});
+
+test("a pin title's doubled ampersand is undone, so the popup shows one", () => {
+    const menu = buildTrayMenu({
+        badge: 0,
+        update: undefined,
+        pins: [pin(1, "Fix A & B")],
+        showWindow: () => undefined,
+        openSettings: () => undefined,
+        quit: () => undefined,
+        openPin: () => undefined,
+    });
+    const row = menu.rows.find((each) => each.kind === "action" && each.id === "pin-1");
+
+    assert.equal(row?.kind === "action" ? row.label : undefined, "Fix A & B");
+
+    const page = menuPage(menu.rows, trayMenuPalette("windows", false, theme, "#0067c0"));
+
+    assert.match(page, /Fix A &amp; B/);
+    assert.doesNotMatch(page, /&amp;&amp;/);
 });
 
 test("the page draws the items and escapes a label", () => {

@@ -88,13 +88,14 @@ export function buildTrayMenu(input: TrayMenuInput): TrayMenuModel {
 
 function rowOf(action: TrayMenuAction): TrayMenuItem {
     // A pin's label is "<mark>  <title>" (src/main/bridge-input.ts). The mark is one character, so a title that itself
-    // holds two spaces stays whole.
+    // holds two spaces stays whole. The title doubles every "&" so a native menu shows one; the popup has no
+    // mnemonics, so it draws the title with the doubling undone.
     const mark = action.id.startsWith("pin-") ? action.label.slice(0, 1) : undefined;
 
     return {
         kind: "action",
         id: action.id,
-        label: mark !== undefined ? action.label.slice(3) : action.label,
+        label: mark !== undefined ? action.label.slice(3).replace(/&&/g, "&") : action.label,
         ...(mark !== undefined ? { mark } : {}),
     };
 }
@@ -107,13 +108,22 @@ export interface ScreenRect {
     height: number;
 }
 
+/**
+ * One display. The tray icon lives on the taskbar, which is outside the work area, so the icon is matched against the
+ * full bounds. The menu is then placed and clamped inside the work area, so it never slides under the taskbar.
+ */
+export interface TrayScreen {
+    bounds: ScreenRect;
+    workArea: ScreenRect;
+}
+
 /** Where the tray icon sits, and how big the menu is. */
 export interface TrayAnchor {
     /** The icon's rectangle. On Windows the taskbar can be on any edge. */
     icon: ScreenRect;
     menu: { width: number; height: number };
-    /** Every screen the menu may sit on. */
-    screens: ScreenRect[];
+    /** Every display the menu may sit on. */
+    screens: TrayScreen[];
     /** A gap between the icon and the menu, so it does not cover the icon. */
     gap: number;
     /** How far the menu stays from a screen's edge. */
@@ -125,11 +135,13 @@ export interface TrayAnchor {
  * whole menu stays on one screen. A menu taller than the screen is pinned to the top margin.
  */
 export function placeTrayMenu(anchor: TrayAnchor): { x: number; y: number } {
-    const screen = screenOf(anchor.icon, anchor.screens) ?? anchor.screens[0];
+    const display = screenOf(anchor.icon, anchor.screens) ?? anchor.screens[0];
 
-    if (screen === undefined) {
+    if (display === undefined) {
         return { x: anchor.icon.x, y: anchor.icon.y };
     }
+
+    const screen = display.workArea;
 
     const { icon, menu, gap, margin } = anchor;
     const room = {
@@ -168,11 +180,11 @@ export function placeTrayMenu(anchor: TrayAnchor): { x: number; y: number } {
     };
 }
 
-function screenOf(icon: ScreenRect, screens: ScreenRect[]): ScreenRect | undefined {
+function screenOf(icon: ScreenRect, screens: TrayScreen[]): TrayScreen | undefined {
     const cx = icon.x + icon.width / 2;
     const cy = icon.y + icon.height / 2;
 
-    return screens.find((screen) => cx >= screen.x && cx < screen.x + screen.width && cy >= screen.y && cy < screen.y + screen.height);
+    return screens.find(({ bounds }) => cx >= bounds.x && cx < bounds.x + bounds.width && cy >= bounds.y && cy < bounds.y + bounds.height);
 }
 
 function clamp(value: number, min: number, max: number): number {
