@@ -21,6 +21,8 @@ Provider keys never leave the main server. A computer that executes needs no key
 | **The bundled Pi Pocket runs while the app runs** (in the tray when the window is closed, at login when that is on). | When the app quits, standalone sessions stop and Pi Durable picks them up at the next start; remote sessions wait for the computer. |
 | **A session's place is fixed when it is made.** A remote session executes on its computer for its whole life; it never moves to the server or to another computer. | Nothing to migrate, and no question of where a step ran. |
 | **This computer is offered for remote work only when you turn it on** (Settings → Remote execution, shown only in remote mode). | Executing for a server is a real permission: opt in, never by default. |
+| **Each new remote session on a computer needs a yes on that computer.** The app shows a dialog: who, which session, which folder. A folder said yes to joins the computer's allowed list. | Someone signed in as you elsewhere cannot start work on, or widen access to, your computer without you at it. |
+| **Settings are split by who owns them.** The app: standalone or remote, and "offer this computer". The Pi Pocket server: a Runners section for other runners. | The app links itself; other runners (deployable ones) are the server's business, in standalone mode too. |
 | **Only the session's owner can make a remote session execute.** A per-session switch, off by default, lets the others in the session prompt it too. No handover of sessions. | Nobody else's message, schedule, or hook runs anything on someone's computer unless its owner allowed it for that session. |
 | **Folders are allowed per computer, not per session.** The list starts empty and grows as you pick folders. | One list per computer to check and to prune. |
 | **The execution layer is its own part, not part of the app.** | The same runner serves the app today and, later, a deployable runner (a VPS, a container, a CI machine) linked to the same sessions. |
@@ -56,6 +58,26 @@ Three pieces, each usable without the others:
 All three live in Pi Pocket itself (the app bundles Pi Pocket, and the server side must be there anyway). The app adds
 only: start and stop the runner, link this computer in Settings, and show its state in the tray.
 
+## Settings
+
+**The app (Pi Pocket desktop):**
+
+- **Server:** this computer (the bundled Pi Pocket, standalone) or the address of a main server (remote). One or the
+  other.
+- **Remote execution** (remote mode only): offer this computer to the main server. On: the app links itself (its
+  sign-in gets the runner its key) and starts the runner. Off: the runner stops and its key is revoked. Below it, this
+  computer's allowed folders, which can be removed.
+
+In standalone mode, the server is on this computer and executes here already: nothing to link.
+
+**The Pi Pocket server, Settings → Runners** (on any Pi Pocket, the bundled one included):
+
+- Every computer that executes for this server: the desktop apps that linked themselves and the runners linked by hand,
+  with their state, last seen, owner, and allowed folders. Revoke one, or remove a folder.
+- **Link a runner:** shows a one-time code for a deployable runner (`pi-pocket runner link <server> <code>`).
+
+So a standalone Pi Pocket on a laptop can also have runners: a VPS or a CI machine linked to it by code.
+
 ## Verification
 
 **The sign-in proves who you are. The runner then gets a key of its own.** You do nothing extra: the app is signed in,
@@ -78,12 +100,16 @@ the one-time code to paste (`pi-pocket runner link <server> <code>`).
 1. In the app, connect to the main server (remote mode), then turn on Settings → Remote execution. The app links this
    computer, as above. Turning it off stops the runner and revokes its key.
 2. The runner connects out to the server and stays connected. No port opens on this computer.
-3. On the server, New session → the computer ("Maya's MacBook") → a folder. The folders come from the runner. A folder
-   not yet on the computer's allowed list is added to it when picked; the list is in the app's Settings and on the
-   server's page for that computer, where folders can be removed.
-4. The agent runs on the server with the server's keys. Each tool call goes to the runner, runs on this computer, and
+3. On the server, New session → the computer ("Maya's MacBook") → a folder. The folders come from the runner.
+4. **The computer confirms.** The app shows a dialog on this computer: "Maya wants to start *Rate limiting for login*
+   in ~/code/aurora-api on this computer", with Allow and Deny. The session waits ("waiting for MacBook to allow")
+   until then, and Deny ends it. A folder allowed this way joins the computer's allowed list.
+
+   A deployable runner has no dialog: its allowed folders are in its own config file (or `pi-pocket runner allow
+   <folder>`), and a new session in a folder not on that list is refused.
+5. The agent runs on the server with the server's keys. Each tool call goes to the runner, runs on this computer, and
    the result comes back. The session and its history are on the server.
-5. While the computer is asleep, offline, or the app is closed, the session shows "MacBook offline", waits, and has a
+6. While the computer is asleep, offline, or the app is closed, the session shows "MacBook offline", waits, and has a
    Stop button. It never runs the step on the server instead.
 
 **The owner rule:** only the session's owner (the person who made it) can start a turn in a remote session. Others in
@@ -184,11 +210,7 @@ concern.
 
 ## Open questions
 
-1. With a local server (standalone mode), what does Settings show for remote execution: nothing, or only the runner
-   (to offer this computer to another server while it is also a standalone server)?
-2. Adding a folder to a computer's allowed list happens on the server (in New session). Should a new folder also need
-   a yes on the computer itself (a notification from the app), so that someone signed in as you elsewhere cannot widen
-   it?
+None at the moment.
 
 ## Research
 
