@@ -288,7 +288,7 @@ export function setUpLocalServer(host: LocalHost) {
 
             await pinNpm(unpacked, join(runtimes, id));
 
-            await rename(unpacked, join(runtimes, id));
+            await renameRetrying(unpacked, join(runtimes, id));
 
             return runtime;
         } finally {
@@ -544,12 +544,19 @@ export function setUpLocalServer(host: LocalHost) {
     const stopLeftover = async (): Promise<void> => {
         const pid = Number(await readFile(pidFile, "utf8").catch(() => ""));
 
-        if (!Number.isInteger(pid) || pid <= 0 || host.platform === "win32") {
+        if (!Number.isInteger(pid) || pid <= 0) {
             return;
         }
 
+        const windows = host.platform === "win32";
         const command = await new Promise<string>((done) => {
-            const proc = spawn("ps", ["-p", String(pid), "-o", "command="], { stdio: ["ignore", "pipe", "ignore"] });
+            const proc = windows
+                ? spawn(
+                      "powershell.exe",
+                      ["-NoProfile", "-NonInteractive", "-Command", `(Get-CimInstance Win32_Process -Filter 'ProcessId=${String(pid)}').CommandLine`],
+                      { stdio: ["ignore", "pipe", "ignore"], windowsHide: true },
+                  )
+                : spawn("ps", ["-p", String(pid), "-o", "command="], { stdio: ["ignore", "pipe", "ignore"] });
             let output = "";
 
             proc.stdout.on("data", (chunk: Buffer) => {
@@ -560,7 +567,12 @@ export function setUpLocalServer(host: LocalHost) {
         });
 
         if (command.includes(runtimes) && command.includes("pi-pocket.js")) {
-            process.kill(pid, "SIGTERM");
+            if (windows) {
+                // No SIGTERM there: end the launcher and what it started (the server, a tunnel). Sessions resume at start.
+                spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }).on("error", () => undefined);
+            } else {
+                process.kill(pid, "SIGTERM");
+            }
 
             for (let waited = 0; waited < STOP_LIMIT_MS; waited += 250) {
                 await new Promise((resolve) => setTimeout(resolve, 250));
@@ -842,6 +854,28 @@ export function setUpLocalServer(host: LocalHost) {
             await stop();
         },
     };
+}
+
+/**
+ * Renames a folder, trying again for a few seconds: on Windows an antivirus scan of the files just written holds them
+ * open, and the rename fails with EPERM, EACCES, or EBUSY until it is done.
+ */
+async function renameRetrying(from: string, to: string): Promise<void> {
+    for (let attempt = 0; ; attempt++) {
+        try {
+            await rename(from, to);
+
+            return;
+        } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+
+            if (attempt >= 20 || (code !== "EPERM" && code !== "EACCES" && code !== "EBUSY")) {
+                throw error;
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+    }
 }
 
 /** Lines the launcher prints around a failure that say nothing about its cause. */
