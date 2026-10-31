@@ -1,5 +1,5 @@
 /** The config screen: the connection on top, how to get a server below it, then the settings. */
-import type { ConfigReason, ConfigState, GuiConfigApi, LocalAction, LocalState, ProbeResult, Settings } from "../../shared/types";
+import type { ConfigReason, ConfigState, DictationModelState, GuiConfigApi, LocalAction, LocalState, ProbeResult, Settings } from "../../shared/types";
 
 declare global {
     interface Window {
@@ -484,6 +484,7 @@ function render(next: ConfigState): void {
     element("settings-page").hidden = next.recovery;
     element("settings-shortcut").textContent = `Return to Server settings any time with ${next.platform === "darwin" ? "⌘," : "Ctrl+,"}, the tray menu, or a right-click on the page.`;
     renderLocal(next);
+    renderDictation(next);
     element("app-version").textContent = next.appVersion;
     renderUpdate(next);
     element("config-path").textContent = next.configPath;
@@ -839,6 +840,133 @@ for (const button of document.querySelectorAll("[data-relaunch]")) {
 
 element<HTMLFormElement>("settings-form").addEventListener("submit", (event) => {
     event.preventDefault();
+});
+
+// ——— Dictation ———
+
+function formatSize(bytes: number): string {
+    return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${String(Math.max(1, Math.round(bytes / 1e6)))} MB`;
+}
+
+/** Runs a dictation action; a failure shows in the card. */
+function dictationAction(type: "download" | "cancel" | "remove" | "use", id: string): void {
+    gui.dictation({ type, id }).catch((error: unknown) => {
+        const message = element("dictation-message");
+
+        message.textContent = (error as Error).message;
+        message.hidden = false;
+    });
+}
+
+function modelRow(model: DictationModelState, busy: boolean): HTMLElement {
+    const row = document.createElement("div");
+    const text = document.createElement("span");
+    const name = document.createElement("strong");
+    const about = document.createElement("small");
+    const buttons = document.createElement("span");
+
+    row.className = "row model";
+    row.dataset.chosen = String(model.chosen);
+    name.textContent = model.name;
+
+    if (model.recommended) {
+        const tag = document.createElement("em");
+
+        tag.textContent = "Recommended";
+        name.append(" ", tag);
+    }
+
+    if (model.chosen) {
+        const tag = document.createElement("em");
+
+        tag.className = "in-use";
+        tag.textContent = "In use";
+        name.append(" ", tag);
+    }
+
+    about.textContent = `${model.languages} · ${formatSize(model.size)} · ${model.note} ${model.license}.`;
+    text.append(name, about);
+    buttons.className = "buttons";
+
+    const button = (label: string, type: "download" | "cancel" | "remove" | "use", kind = "secondary"): void => {
+        const each = document.createElement("button");
+
+        each.type = "button";
+        each.className = kind;
+        each.textContent = label;
+        each.addEventListener("click", () => {
+            if (type === "remove" && !confirm(`Remove ${model.name}? It can be downloaded again.`)) {
+                return;
+            }
+
+            dictationAction(type, model.id);
+        });
+        buttons.append(each);
+    };
+
+    if (model.download !== undefined) {
+        const progress = document.createElement("span");
+        const bar = document.createElement("div");
+        const fill = document.createElement("div");
+        const step = document.createElement("small");
+
+        progress.className = "model-progress";
+        bar.className = "progress";
+        fill.style.width = `${String(model.download.percent)}%`;
+        bar.append(fill);
+        step.textContent = `${model.download.step} ${String(model.download.percent)}%`;
+        progress.append(bar, step);
+        text.append(progress);
+        button("Cancel", "cancel");
+    } else if (model.installed) {
+        if (!model.chosen) {
+            button("Use", "use");
+        }
+
+        button("Remove", "remove", "secondary danger");
+    } else {
+        button("Download", "download");
+        buttons.querySelector("button")!.disabled = busy;
+    }
+
+    row.append(text, buttons);
+
+    return row;
+}
+
+function renderDictation(next: ConfigState): void {
+    const dictation = next.dictation;
+    const card = element("dictation-card");
+    const list = element("dictation-models");
+    const message = element("dictation-message");
+
+    element("dictation-engine-size").textContent = dictation.engine.installed ? "installed" : `${formatSize(dictation.engine.size)}`;
+    element("dictation-folder").textContent = dictation.folder;
+    message.hidden = dictation.message === undefined;
+    message.textContent = dictation.message ?? "";
+
+    if (!dictation.supported) {
+        element("dictation-note").textContent = "Dictation has no speech engine for this computer's system and processor.";
+        list.replaceChildren();
+        card.querySelectorAll<HTMLElement>(".row").forEach((row) => row.classList.add("off"));
+
+        return;
+    }
+
+    list.replaceChildren(...dictation.models.map((model) => modelRow(model, dictation.downloading)));
+}
+
+element("dictation-show-folder").addEventListener("click", () => {
+    void gui.showDictationFolder();
+});
+
+gui.onFocus((section) => {
+    if (section === "dictation") {
+        const card = element<HTMLDetailsElement>("dictation-card");
+
+        card.open = true;
+        card.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
 });
 
 // ——— Start ———

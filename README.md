@@ -89,6 +89,21 @@ Change the theme in Pi Pocket and the app follows: the settings screen, the wind
 
 <img src="docs/images/light.png" alt="The same window in Catppuccin Latte, a light theme" width="100%" />
 
+### Dictation, offline
+
+Pi Pocket's mic button (and Alt+V) works in the app, recognised on your computer: the audio never leaves it. Nothing comes with the app. In **Server settings → Dictation**, pick a speech model and press **Download**; the speech engine ([sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), about 12 MB) comes with the first model. **Remove** deletes a model, and removing the last one deletes the engine too. Every file is checked against its SHA-256 before it is used.
+
+| Model | Languages | Download |
+|---|---|---|
+| Parakeet TDT 0.6B v2 (recommended) | English | 661 MB |
+| Parakeet TDT 0.6B v3 (recommended) | 25 European languages | 670 MB |
+| Whisper large-v3 turbo, large-v3, small, base, tiny | 99 languages | 1.0 GB to 104 MB |
+| Distil-Whisper large-v3.5 | English | 984 MB |
+| Moonshine base | English | 287 MB |
+| SenseVoice small | Chinese, Cantonese, Japanese, Korean | 237 MB |
+
+Words show while you speak and are corrected when you pause (**Words as you speak**; turn it off to save CPU). A model loads at the first dictation and leaves memory after 10 idle minutes. The mic needs Pi Pocket on `127.0.0.1`/`localhost` or `https`: browsers, and so the app, keep the microphone from plain-http pages on other addresses.
+
 ### Settings
 
 Everything is on one screen: **Server settings…** in the File menu, the tray, Pi Pocket's own menu, a right-click on the page, or Ctrl+, (⌘, on macOS). The shortcut belongs to the desktop app and works even on a broken server page. The badge says **Connected** once Pi Pocket is open; **Connect** waits until you change the address and check the new one.

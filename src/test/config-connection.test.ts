@@ -43,6 +43,7 @@ async function page(probe: (input: string) => Promise<ProbeResult>, initial: Par
         titleBarAtStart: "seamless", theme: DEFAULT_THEME, platform: "win32", appVersion: "test",
         update: { method: "source", status: "idle" },
         local: { status: "absent", log: [], restartNeeded: false, update: { status: "idle" }, defaults: { folder: "/home/test", data: "/home/test/.pi-pocket" }, home: "/test/server" },
+        dictation: { supported: true, status: "idle", engine: { installed: false, size: 11e6 }, folder: "/test/dictation", models: [], downloading: false },
         ...initial,
     };
     let render: (next: ConfigState) => void = () => undefined;
@@ -52,6 +53,7 @@ async function page(probe: (input: string) => Promise<ProbeResult>, initial: Par
         state: async () => state,
         probe,
         onState: (listener: typeof render) => { render = listener; },
+        onFocus: () => () => {},
         openSettings: async () => { settingsOpened++; state = { ...state, recovery: false }; render(state); },
         connect: async (input: string, unverified = false) => {
             connections.push({ url: input, unverified });
