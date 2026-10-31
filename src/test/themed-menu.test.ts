@@ -198,6 +198,8 @@ function fakePage() {
         isComposing?: boolean;
         timeStamp: number;
         path: FakeElement[];
+        current?: FakeElement;
+        stopped?: boolean;
         defaultPrevented: boolean;
         preventDefault(): void;
         stopPropagation(): void;
@@ -308,9 +310,22 @@ function fakePage() {
         preventDefault() {
             this.defaultPrevented = true;
         },
-        stopPropagation: () => undefined,
+        stopPropagation() {
+            this.stopped = true;
+        },
+        // As in a browser: a listener outside the closed shadow root does not see the nodes inside it.
         composedPath() {
-            return this.path;
+            const inside = (node: FakeElement | undefined): boolean => {
+                for (let each = node; each !== undefined; each = each.parent) {
+                    if (each.tag === "#shadow") {
+                        return true;
+                    }
+                }
+
+                return false;
+            };
+
+            return inside(this.current) ? this.path : this.path.filter((node) => !inside(node));
         },
         ...extra,
     });
@@ -325,8 +340,14 @@ function fakePage() {
         each.path = path;
 
         for (const node of path) {
+            each.current = node;
+
             for (const listener of node.listeners.get(each.type) ?? []) {
                 listener(each);
+            }
+
+            if (each.stopped === true) {
+                break;
             }
         }
 
@@ -437,6 +458,28 @@ test("the drawn menu closes without a pick on Escape, outside press, blur, scrol
         assert.equal(await picked, null, name);
         assert.equal(page.host(), undefined, name);
     }
+});
+
+test("a mouse press on a line keeps the menu open for its click; a press beside the menu closes it", async () => {
+    const template = contextMenuTemplate(click({ selectionText: "hi" }), { ...noSpelling, openSettings: () => undefined });
+    const page = fakePage();
+    const picked = draw(page, template, 5);
+    const line = page.buttons()[0]!;
+    const press = page.dispatch(line, page.event("mousedown", { timeStamp: 5000 }));
+
+    assert.equal(press.defaultPrevented, true);
+    assert.equal(page.menus().length, 1);
+    // A right-click on the menu opens nothing else and leaves it open.
+    assert.equal(page.dispatch(line, page.event("contextmenu", { timeStamp: 5000 })).defaultPrevented, true);
+    assert.equal(page.menus().length, 1);
+    line.click();
+    assert.equal(await picked, template.findIndex((item) => item.role === "copy"));
+
+    const other = fakePage();
+    const none = draw(other, template, 6);
+
+    other.dispatch(other.host()!, other.event("mousedown", { timeStamp: 5000 }));
+    assert.equal(await none, null);
 });
 
 test("a disabled line does nothing; a second right-click replaces the open menu", async () => {

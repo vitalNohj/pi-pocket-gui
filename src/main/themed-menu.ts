@@ -451,21 +451,28 @@ export function drawMenu(
             menu.append(box);
         }
 
-        // A press anywhere but the menu closes it, as the session menu's scrim does, without reaching the page.
+        // A press on the menu stays in it: listeners outside a closed shadow root cannot tell the menu from the
+        // layer under it (the event is retargeted to the host), so the menu stops its own presses here, inside.
+        const keep = (event: Event): void => {
+            event.preventDefault();
+            event.stopPropagation();
+        };
+
+        menu.addEventListener("mousedown", keep);
+        menu.addEventListener("contextmenu", keep);
+        // Every press that reaches the host is outside the menu: it closes it, as the session menu's scrim does,
+        // without reaching the page.
         host.addEventListener("mousedown", (event) => {
             event.preventDefault();
 
-            if (!event.composedPath().includes(menu) && event.timeStamp - opened > 100) {
+            if (event.timeStamp - opened > 100) {
                 close();
             }
         });
         host.addEventListener("contextmenu", (event) => {
             event.preventDefault();
             event.stopPropagation();
-
-            if (!event.composedPath().includes(menu)) {
-                close();
-            }
+            close();
         });
         menu.addEventListener("keydown", (event) => {
             const key = keyOf(event.key, event.shiftKey);
