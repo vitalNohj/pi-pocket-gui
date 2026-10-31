@@ -1,156 +1,187 @@
-# Remote execution: plan and findings
+# Remote execution: plan
 
-Status: research done, nothing built. Written 2026-10-30, against Pi Pocket 0.26.0, Pi Durable / coding-agent 1.4.0, and
-this app 0.1.5 (Electron 45.1.0).
+Status: design, nothing built. Updated 2026-10-31. Against Pi Pocket 0.27.0, Pi Durable / coding-agent 1.4.0, and this
+app 0.1.6 (Electron 45.1.0, Node 24.22.1 built in).
 
 ## The goal
 
-A Pi Pocket session whose tools run on another computer, the one this app runs on, while the agent, its model, its keys,
-and the session's history stay on the server.
+A Pi Pocket session that **runs on the main server and executes on another computer**. The agent, the model, the
+provider keys, the history, and everything else stay on the main server. Only the tools (files, commands, git) run on
+the other computer.
 
-- The New session sheet gets a third choice beside Home and Computer: **Remote**. It lists the execution environments
-  (computers) the person may use, and then their folders, served by that computer.
-- If the server is not on this computer, a setting can make Remote the default.
-- The agent can find out where it runs (the computer's OS, shell, folder, and what it can do).
+Provider keys never leave the main server. A computer that executes needs no key of any provider.
 
-## Chosen approach
+## Decisions
 
-**The runner is a mode of Pi Pocket itself, served by the server, run by this app's built-in Node.**
-
-- Pi Pocket gets a runner mode in the same package. It is not a second server: it holds no sessions and no durable
-  state, only carries out file, command, and git requests.
-- The server builds that mode into one JavaScript file and serves it at a versioned address with a hash.
-- The app downloads it once per server version, checks the hash, caches it, and starts it as a child process with
-  `ELECTRON_RUN_AS_NODE=1`. Electron 45 has Node 24.22.1 (Pi Pocket needs 22.19 or newer) and a built-in `WebSocket`.
-- The runner dials out to the server and keeps one WebSocket open. The server sends requests down it ("run this",
-  "read this"); answers and streamed output come back the same way. No port is opened on this computer. Behind a proxy
-  that blocks WebSockets, the fallback is a long-lived HTTP stream down and plain POSTs up, as Pi Pocket's live updates
-  already work.
-- On the server, the runner plugs in as Pi Durable's `ExecutionEnv` (the interface the tools already use). No second
-  file interface.
-
-Why this over a separate runner program: one codebase, so git, folder checks, local-server discovery, and Pi's tool code
-are reused, not written twice; the versions always match; a server's local changes come along; no Node install needed.
-
-## Issues
-
-### Added by this approach
-
-1. **The server decides what runs on this computer.** A compromised server could ship a runner without folder limits.
-   Either the server is fully trusted, or a small fixed safety layer in the app checks every request before the
-   downloaded code acts on it.
-2. **Bundling.** Pi Pocket is not built as one file today. The runner build must leave out the web server, sessions,
-   and model code, and must not pull in server-only parts by accident.
-3. **Updates in the middle of work.** When the server updates, the runner must swap versions; a running command
-   finishes or stops cleanly first.
-4. **Older servers.** A server without runner mode serves no code: the app does not offer Remote for it.
-5. **Two Node versions.** The runner runs on Electron's Node 24, the server perhaps on 22: the same code must work on
-   both.
-6. **Desktop only.** A headless machine needs its own way to start a runner, such as `npx pi-pocket runner`.
-
-### In any remote design
-
-1. **Not knowing after a drop.** If the connection breaks in the middle of a command, the server cannot tell whether it
-   ran. The session shows "runner offline", waits (proposed default 10 minutes, adjustable, deadline persisted), has a
-   Stop button, never repeats an uncertain write or command, and never falls back to the server. This matches what
-   Durable does after a restart today: the coding tools are not safe to repeat, so a cut-off call returns `interrupted`.
-2. **Many small round trips over a distant link:** loading skills and AGENTS.md, `git status` on 500 files, extension
-   hooks on every step. These need batching or caching on the runner.
-3. **Large files** (downloads, images, diffs) need size limits and backpressure so one does not block the rest.
-4. **Background tasks** use `/proc`, Unix process groups, bash, and `split`: macOS and Windows need their own backends.
-5. **Bash reaches the whole computer.** Folder limits bind only the file tools; real containment needs the OS's sandbox.
-6. **Shared sessions:** who may run things on another person's computer? Suggested: only the runner's owner.
-7. **Extensions:** unknown ones are blocked in remote sessions; Firstmate is off there; billion-context-pi needs an
-   audited exception.
-8. **The browser** still runs on the server. Reaching this computer's `localhost` needs a per-session tunnel; the list of
-   running servers needs new code for macOS and Windows.
-9. **Secrets:** keys the server puts into commands never go to a runner unless allowed.
-10. **Pairing:** the signed-in app gets a one-time credential and exchanges it for a hashed, revocable, runner-only key.
-    The login token never goes to the runner. Idea from Xpropel/Pi-Remote: QR pairing with a 2-digit check code.
-
-## Open decisions
-
-| Question | Suggested for version 1 |
+| Decision | Why |
 |---|---|
-| Runner lifetime: only while the app is open, or a login service? | Only while the app is open |
-| Background tasks in version 1? | Later |
-| Trust: server fully trusted, or a fixed safety layer in the app? | Fully trusted now, safety layer later |
-| Shared sessions: who may run on someone's runner? | Only its owner |
+| **Run there, execute here** (not: run here, show there). | The provider keys stay only on the main server. |
+| **The app bundles a full Pi Pocket.** | New users get a server with the app. The code that runs on this computer ships with the app, versioned and known: the server never sends code. |
+| **Two modes, one at a time, no switching.** Standalone: the bundled Pi Pocket is the server. Remote: the app opens a main server, and the bundled Pi Pocket only executes for it. | Simple to explain, nothing to merge, no second set of sessions on this computer while in remote mode. |
+| **The bundled Pi Pocket runs while the app runs** (in the tray when the window is closed, at login when that is on). | When the app quits, standalone sessions stop and Pi Durable picks them up at the next start; remote sessions wait for the computer. |
+| **Only the session's owner can make a remote session execute.** No exception by default. | Nobody else's message, schedule, or hook runs anything on someone's computer. |
+| **The execution layer is its own part, not part of the app.** | The same runner serves the app today and, later, a deployable runner (a VPS, a container, a CI machine) linked to the same sessions. |
+| **Each computer gets its own key**, got through the existing sign-in, with no extra step in the app. | See [Verification](#verification). |
 
-## Estimates
+## The parts
 
-From 4 read-only reviews (gpt-6.1-sol, thinking max). Rows overlap; totals are rough. A separate runner program was
-assumed; with the chosen approach the runner drops from about 2,100–3,200 lines to about 800–1,300, and folders, git,
-and skills shrink, so version 1 is roughly **8,000–14,000 lines** instead of 11,000–19,000 (estimated, not counted).
+```
+Main Pi Pocket server                              This computer
+┌──────────────────────────────────┐               ┌──────────────────────────────┐
+│ agent, models, keys, sessions     │               │ Pi Pocket desktop app         │
+│                                   │               │   (window, tray, settings)    │
+│ execution environments            │               │          │ starts, stops      │
+│   "server"  → local ExecutionEnv  │   WebSocket   │          ▼                    │
+│   "runner"  → RemoteExecutionEnv ◄├───────────────┤► runner (bundled Pi Pocket,   │
+│                                   │  (runner      │   runner mode): files,        │
+│ runner registry, keys, policy     │   dials out)  │   commands, git, request log  │
+└──────────────────────────────────┘               └──────────────────────────────┘
+```
 
-### Version 1
+Three pieces, each usable without the others:
 
-| Area | Difficulty | Lines | Files |
-|---|---|---|---|
-| Runner (separate program; much less as a Pi Pocket mode) | 4/5 | 2,200–3,400 | 10–14 |
-| Pairing and the connection | 4/5 | 1,200–1,900 | 8–11 |
-| Pi's tools on the runner (add grep/find/ls; SDK grep spawns `rg` locally) | 4/5 | 1,100–1,850 | 6–8 |
-| Offline and restart handling | 5/5 | 800–1,400 | 6–9 |
-| Sessions keep their computer; Remote in the New session sheet | 3/5 | 1,150–2,000 | 14–21 |
-| The agent knows its computer | 2/5 | 270–470 | 6–9 |
-| Folders, files, diffs, branches | 3–4/5 | 1,700–2,850 | 25–37 |
-| Skills, AGENTS.md, memory, model defaults | 3–4/5 | 900–1,550 | 16–24 |
-| Secrets and the guard's path rules | 4/5 | 350–650 | 8–12 |
-| Extensions: block unknown ones, adapt Pi Pocket's own | 3/5 | 1,700–3,200 | 18–26 |
-| Browser: tunnel to this computer's `localhost`; Reveal in Finder | 4/5 | 1,100–1,950 | 18–24 |
+1. **The protocol** (`pi-pocket/src/remote/protocol`): message types, versions, request IDs, and the request log's
+   states. No Electron, no server, no file system. Both sides import it.
+2. **The runner** (`pi-pocket/src/remote/runner`, started as `pi-pocket runner`): connects out to a server with its
+   key, carries out requests through Pi Durable's `ExecutionEnv` on its own computer, and keeps the request log. It
+   knows nothing about the app. The app starts it as a child process (Electron's Node, `ELECTRON_RUN_AS_NODE=1`); a
+   deployable runner is the same command under systemd, launchd, or a container.
+3. **The server side** (`pi-pocket/src/remote/host`): accepts runners, keeps the registry of computers and their keys,
+   and gives a session a `RemoteExecutionEnv` that sends each tool call to that session's runner. It plugs in where the
+   session's `ExecutionEnv` is chosen today (`Harness.open({ env })`), so the tools do not change.
 
-### Later
+All three live in Pi Pocket itself (the app bundles Pi Pocket, and the server side must be there anyway). The app adds
+only: start and stop the runner, link this computer in Settings, and show its state in the tray.
 
-| Area | Difficulty | Lines |
-|---|---|---|
-| Background tasks on the runner | 5/5 | 1,300–2,050 |
-| Worktrees | 4/5 | 400–700 |
-| Artifacts and Design from files on this computer | 4/5 | 400–750 |
-| Browser: list of servers running on this computer | 3/5 | 600–1,100 |
-| Extensions' tools on this computer (hooks and UI stay on the server) | 4/5 | 3,800–6,500 |
-| Browser running on this computer | 5/5 | 1,400–2,400 |
+## Verification
 
-Until a later item is built, a remote session turns that feature off and says why. It never runs it on the server
-instead.
+**The sign-in proves who you are. The runner then gets a key of its own.** You do nothing extra: the app is signed in,
+so it asks the server for the key itself.
 
-## Suggested order of pull requests
+Why not use the sign-in directly:
 
-1. Runner mode and pairing.
-2. Tools and offline handling.
-3. Sessions keep their computer; the New session sheet.
-4. Folders, files, git.
-5. Skills, memory, secrets, extension blocking.
-6. Browser tunnel and Reveal in Finder.
+- The sign-in is the page's cookie, and it can do everything you can: read every session, invite people, change
+  settings. The runner needs one thing only: accept work for your sessions.
+- A key per computer can be revoked alone (a lost laptop) without signing you out everywhere, and Settings →
+  Computers on the server lists each one with when it was last seen.
+- A deployable runner has no browser and no sign-in. It needs a key anyway: one mechanism for both.
 
-## Review findings worth keeping
+How: the signed-in app asks the server for a one-time code; the runner exchanges it for its key; the server keeps only
+the key's hash. The key is limited to "be a runner for this person". For a deployable runner, the server's web UI shows
+the one-time code to paste (`pi-pocket runner link <server> <code>`).
 
-- **Browser:** the panel streams JPEG frames (`Page.startScreencast`) long-polled through `/browser/frame`. Recommended
-  tunnel: each conversation's Chromium context gets its own proxy (`Target.createBrowserContext` with `proxyServer` and
-  `proxyBypassList: "<-loopback>"`), forwarding loopback through runner TCP channels, with HTTP, WebSocket, and CONNECT,
-  so pages keep their origins and hot reload works. A process-wide proxy or PAC cannot override Chromium's localhost
-  bypass; URL rewriting breaks origins.
-- **Extensions:** Pi Pocket does not load Pi's `ExtensionRunner`, so the extensions in `~/.pi` are not active in Pocket
-  today. Version 1 adds a remote-support flag and a session-bound `host.operations(id)` over `envFor()`, and gates
-  commands, web parts, `host.on` listeners, and `CommandEnvs` (no server secrets by default). Built-ins needing work:
-  background, browser, artifacts (path inputs), design (export and design-system file), codemode (temporary path),
-  memory (`projectOf`), teams and subagents. Remote hooks are possible but add a round trip per step and fail offline.
-- **Core:** the server needs an HTTP upgrade handler (`src/server/main.ts`); tools are installed in
-  `src/server/app.ts` (`registry.install(CodingTools)`, `Harness.open({ env })`); cwd lives in both
-  `SessionMeta.cwd` and Durable's `AgentDoc.cwd`; `!` commands do not survive a server restart today; the system
-  prompt reports the server's `process.platform`.
-- **Folders:** about 70 direct `fs` / `child_process` call sites touch the project (workspace, files, git, changes,
-  branches, worktrees, skills, prompts, memory, artifacts, design). Access must be keyed by (environment, cwd), not cwd,
-  and made asynchronous; HEAD polling (every 3 s) and the 500-file status need caching or batching.
+## How a remote session works
 
-Full notes: [research/core-notes.md](research/core-notes.md) (core, with file and line references) and
-[research/folders-audit.md](research/folders-audit.md) (every call site that touches the disk). Line numbers are as of
-Pi Pocket 0.26.0.
+1. In the app, connect to the main server (remote mode). The app links this computer the first time, as above.
+2. The runner connects out to the server and stays connected. No port opens on this computer.
+3. On the server, New session → the computer ("Maya's MacBook") → a folder. The folders come from the runner.
+4. The agent runs on the server with the server's keys. Each tool call goes to the runner, runs on this computer, and
+   the result comes back. The session and its history are on the server.
+5. While the computer is asleep, offline, or the app is closed, the session shows "MacBook offline", waits, and has a
+   Stop button. It never runs the step on the server instead.
 
-## Related
+**The owner rule:** only the session's owner (the person who made it) can start a turn in a remote session. Others in
+the session can watch and chat; their messages cannot start the agent. Schedules, hooks, goals, and subagents of a
+remote session act as the owner and only for the owner. A runner accepts work only for sessions owned by its own person.
 
-- Xpropel/Pi-Remote (github.com/Xpropel/Pi-Remote): the opposite direction (the agent runs in a local `pi`, a relay
-  mirrors it to a browser). Not usable as a part; ideas taken: QR pairing with a check code, remote bash off by default,
-  online only while the window is open, Cloudflare Tunnel on demand.
-- npm `pi-remote` is deprecated, renamed `@wherever-dev/pi` (Wherever), also the opposite direction. Unrelated to the
-  above.
-- Pi's own `examples/extensions/ssh.ts` shows tool Operations over SSH.
+## Problems and solutions
+
+★ marks the chosen solution.
+
+### 1. Not knowing what happened after a drop
+
+- ★ **Every request has an ID; the runner keeps a durable log of them** (in the bundled Pi Pocket's data folder):
+  received, started, finished with its result. After a reconnect, the server asks about each request in flight and gets
+  the result, "still running" (output resumes where it stopped), "killed when the app quit", or "never received". Only
+  the last is sent again.
+- ★ **Duplicate requests are ignored by ID**, so resending is always safe. Remote tool calls can then be marked safe to
+  repeat in Pi Durable, and recover better than local ones do today (those come back `interrupted` after a restart).
+- Commands run under a small supervisor that writes their exit code to a file, so a runner restart keeps the outcome.
+- Optional: while a command runs, the app keeps the computer awake (a setting).
+
+### 2. Many small requests over a distant link
+
+- ★ **Bundled requests:** one "project context" request returns AGENTS.md, skills, git status, and the branch.
+- ★ **The runner pushes changes** (it watches the project) instead of the server polling, which today checks the
+  branch every 3 seconds.
+- Independent requests go side by side. Test with an injected delay.
+
+### 3. Large files
+
+- ★ Chunked transfers with flow control; small control messages go first, so a big file never holds up a command's
+  output. Size limits and ranged reads. Downloads stream to the browser without being held on the server.
+
+### 4. Bash reaches the whole computer
+
+- Folder limits bind the file tools only. A plain runner means "the agent acts as you on this computer".
+- ★ Later: an optional sandbox for the runner's commands (macOS's sandbox, Landlock on Linux, restricted processes on
+  Windows): write only in the project and temp folders.
+- Strongest: a deployable runner in a VM or container.
+
+### 5. Secrets
+
+- ★ The server's own secrets (keys it puts into commands) are never sent to a runner unless the owner allows that key
+  for that computer; they then go in memory, for the one command. Output from the runner is masked for them.
+- A runner can use its own computer's keychain or environment instead.
+
+### 6. Background tasks on macOS and Windows
+
+- ★ The runner keeps its jobs in plain Node (no `/proc`): a job is its process ID and start time. Stopping one stops
+  its process group (macOS, Linux) or its process tree (Windows).
+- First version: jobs end when the runner stops, and the session says so.
+
+### 7. The browser and this computer's `localhost`
+
+- The browser panel runs on the server, so it cannot reach this computer's `localhost`.
+- ★ Later: the runner is a whole Pi Pocket, browser code included. A remote session's browser could run on this
+  computer and reach its `localhost` directly, sending its frames to the server as now.
+- Until then: a per-session tunnel (the server's browser reaches this computer's `localhost` through the runner).
+
+### 8. Extensions
+
+- Most extensions stay on the server and work as now. Extensions get the session's `ExecutionEnv`, so the ones that use
+  it work remotely unchanged.
+- ★ An extension says where it runs (server, the session's computer, or not in remote sessions). One that does not say
+  is off in remote sessions.
+
+### 9. Versions
+
+- The app (with its runner) and the main server update separately. The protocol has a version and a list of
+  capabilities; each side uses what both have, and the server says plainly when a runner is too old.
+
+### 10. Paths and computers
+
+- Paths belong to their computer (Windows paths, case-insensitive file systems): the runner normalizes them, and the
+  server treats them as text it never builds itself.
+- Each runner has a stable ID and a name. One person can have several (a laptop, later a deployable runner).
+
+## Size
+
+Pi Pocket 0.27.0 is about 12 MB unpacked; bundled with its production dependencies the app grows by tens of MB. Not a
+concern.
+
+## Order of work
+
+1. **Bundled Pi Pocket, standalone mode:** the app ships Pi Pocket, starts it with Electron's Node, and opens it. New
+   users need no separate install.
+2. **The protocol and the runner** in Pi Pocket, with the request log, tested against a local server.
+3. **The server side:** runner registry, keys, linking, `RemoteExecutionEnv`, the owner rule.
+4. **Sessions on a computer:** the session keeps its computer; New session offers the computers; offline handling.
+5. **Folders, files, git, project context** through the runner.
+6. **Secrets, extension flags, background tasks, the browser** (each can follow on its own).
+
+## Open questions
+
+See the end of the conversation of 2026-10-31; answers go here as they come.
+
+## Research
+
+Earlier reviews (gpt-6.1-sol, read-only), written for a design with a separate runner program. Their file and line
+references (Pi Pocket 0.26.0) and their list of every place the server touches the disk still apply:
+
+- [research/core-notes.md](research/core-notes.md): connection, tools, background tasks, Durable's replay rules, data
+  model, the New session sheet.
+- [research/folders-audit.md](research/folders-audit.md): about 70 places in the server that touch project files.
+
+Related: Xpropel/Pi-Remote (github.com/Xpropel/Pi-Remote) does the opposite (the agent runs in a local `pi`, a relay
+mirrors it to a browser). Ideas taken from it: link a device with a code, online only while the app runs.
