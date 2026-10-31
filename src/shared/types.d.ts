@@ -91,7 +91,7 @@ export interface SettingsProblem {
 /** What a check of an address found. */
 export type ProbeResult =
     | { kind: "detected"; url: string; bridge: number; via: "info" | "manifest" }
-    | { kind: "other"; url: string; status: number; message: string }
+    | { kind: "other"; url: string; status: number; message: string; canOpen: boolean }
     | { kind: "unreachable"; url: string; message: string }
     | { kind: "invalid"; url: string; message: string };
 
@@ -134,6 +134,8 @@ export interface ConfigState {
     connectedUrl?: string;
     /** The server was open before the config screen: the page offers to go back. */
     canReturn: boolean;
+    /** Show the app-owned way back while an unverified webpage (such as a sign-in gateway) is open. */
+    recovery: boolean;
     /** The desktop has a tray. Without one, close minimizes. */
     trayAvailable: boolean;
     translucency: TranslucencySupport;
@@ -224,8 +226,9 @@ export interface GuiConfigApi {
     probe(url: string): Promise<ProbeResult>;
     /** Saves the settings, and returns the stored (checked) state. */
     save(settings: Settings): Promise<ConfigState>;
-    /** Saves the address and opens the server. */
-    connect(url: string): Promise<void>;
+    /** Checks before saving/opening. An unverified HTML page needs explicit permission; API/error pages never open. */
+    connect(url: string, allowUnverified?: boolean): Promise<ProbeResult>;
+    openSettings(): Promise<void>;
     /** Goes back to the server without changing anything. */
     back(): Promise<void>;
     retryNow(): Promise<void>;

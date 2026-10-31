@@ -45,15 +45,23 @@ export async function probe(input: string, fetcher: Fetch, timeoutMs: number): P
         return { kind: "detected", url, bridge: 0, via: "manifest" };
     }
 
-    const redirected = manifest.redirected || info.redirected;
+    // An authentication gateway can hide both endpoints. Only an actual HTML page may be opened deliberately;
+    // redirects alone are not evidence of a sign-in page (an API can redirect to a JSON error, too).
+    const canOpen = [info, manifest].some((response) => {
+        const type = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+
+        return (type === "text/html" || type === "application/xhtml+xml") &&
+            (response.ok || response.status === 401 || response.status === 403);
+    });
 
     return {
         kind: "other",
         url,
         status: manifest.status,
-        message: redirected
-            ? "Something answered, but it sent the app to another page. A sign-in page in front of the server (such as Cloudflare Access) does this: open it anyway and sign in there."
-            : `Something answered (HTTP ${String(manifest.status)}), but it does not look like Pi Pocket.`,
+        canOpen,
+        message: canOpen
+            ? "A webpage answered, but Pi Pocket was not detected. If a sign-in page protects your server, you can open the webpage anyway and sign in. A Server settings button stays available."
+            : `Something answered (HTTP ${String(manifest.status)}), but it does not look like Pi Pocket. Use the Pi Pocket web interface address, not a model/API endpoint. The app has not connected.`,
     };
 }
 

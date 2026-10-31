@@ -22,6 +22,7 @@ import {
 } from "electron";
 import type { ConfigReason, ConfigState, ProbeResult, Settings, SettingsProblem, ThemeColors, TitleBarStyle } from "../shared/types";
 import { retryDelayMs } from "./backoff";
+import { mayConnect, NavigationResponses } from "./connection";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
 import { setUpAppearance } from "./appearance";
 import { setUpTitleBar, titleBarOptions } from "./titlebar";
@@ -77,6 +78,9 @@ interface Gui {
     probe: ProbeResult | undefined;
     /** The address the server view has loaded, once it did. */
     loadedUrl: string | undefined;
+    /** An explicitly opened, unverified HTML page keeps an app-owned way back visible. */
+    unverified: boolean;
+    connectionAttempt: number;
     /** The next automatic check while the config screen shows a server that does not answer. */
     retry: { timer: NodeJS.Timeout; at: number } | undefined;
     /** Checks that failed in a row: the wait grows with each. */
@@ -187,6 +191,8 @@ async function start(): Promise<void> {
         reason: { kind: "first-run" },
         probe: undefined,
         loadedUrl: undefined,
+        unverified: false,
+        connectionAttempt: 0,
         retry: undefined,
         retryAttempt: 0,
         health: undefined,
@@ -393,8 +399,10 @@ function layout(): void {
     // Below the title bar's strip only when the page could not be told to keep clear of it (src/main/titlebar.ts).
     const top = gui.titleBar?.offset() ?? 0;
 
-    gui.server.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) });
-    gui.config.setBounds({ x: 0, y: 0, width, height });
+    const recovery = gui.showing === "server" && gui.unverified ? Math.min(48, height) : 0;
+
+    gui.server.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top - recovery) });
+    gui.config.setBounds({ x: 0, y: recovery > 0 ? height - recovery : 0, width, height: recovery > 0 ? recovery : height });
 }
 
 function show(which: "server" | "config"): void {
@@ -404,10 +412,12 @@ function show(which: "server" | "config"): void {
 
     gui.showing = which;
     gui.server.setVisible(which === "server");
-    gui.config.setVisible(which === "config");
+    gui.config.setVisible(which === "config" || gui.unverified);
+    layout();
     (which === "server" ? gui.server : gui.config).webContents.focus();
     gui.window.setTitle(which === "server" ? gui.server.webContents.getTitle() || "Pi Pocket" : "Pi Pocket — Server settings");
     gui.desktop?.visibilityChanged();
+    pushConfigState();
 }
 
 function showWindow(): void {
@@ -453,7 +463,8 @@ function configState(): ConfigState {
         ...(state.probe === undefined ? {} : { probe: state.probe }),
         ...(state.retry === undefined ? {} : { nextRetryAt: state.retry.at }),
         ...(state.loadedUrl === undefined ? {} : { connectedUrl: state.loadedUrl }),
-        canReturn: state.loadedUrl !== undefined && state.reason.kind === "user",
+        canReturn: state.loadedUrl !== undefined,
+        recovery: state.showing === "server" && state.unverified,
         trayAvailable: state.trayAvailable,
         translucency: state.appearance?.support() ?? { kind: "unsupported", message: "" },
         translucentAtStart: state.translucentAtStart,
@@ -478,7 +489,6 @@ function showConfig(reason: ConfigReason): void {
 
     gui.reason = reason;
     show("config");
-    pushConfigState();
 }
 
 /** The config page may only be the app's own page: it never navigates or opens windows. */
@@ -505,6 +515,13 @@ async function checkAddress(url: string): Promise<ProbeResult> {
 
     if (sameAddress(url, state.settings.server.url)) {
         state.probe = result;
+
+        if (result.kind === "detected" && state.unverified) {
+            state.unverified = false;
+            layout();
+            state.config.setVisible(state.showing === "config");
+        }
+
         pushConfigState();
     }
 
@@ -520,7 +537,7 @@ function sameAddress(a: string, b: string): boolean {
 
 // ——— Connecting ———
 
-function connect(url: string): void {
+function connect(url: string, unverified = false): void {
     const state = gui!;
     const normalized = normalizeServerUrl(url);
 
@@ -540,6 +557,7 @@ function connect(url: string): void {
     stopRetry();
     state.retryAttempt = 0;
     state.reason = { kind: "user" };
+    state.unverified = unverified;
 
     if (state.loadedUrl !== undefined && sameAddress(state.loadedUrl, normalized.url)) {
         show("server");
@@ -558,6 +576,42 @@ function connect(url: string): void {
 
 function watchServerView(): void {
     const contents = gui!.server.webContents;
+
+    const responses = new NavigationResponses();
+    const contentsId = contents.id;
+
+    contents.on("did-start-navigation", (details) => {
+        if (details.isMainFrame && !details.isSameDocument) {
+            responses.started();
+        }
+    });
+
+    // Record before commitment, but do not change UI here: an attachment has headers yet never replaces the page.
+    contents.session.webRequest.onHeadersReceived((details, callback) => {
+        if (details.webContentsId === contentsId && details.resourceType === "mainFrame") {
+            const type = Object.entries(details.responseHeaders ?? {}).find(([name]) => name.toLowerCase() === "content-type")?.[1][0] ?? "";
+
+            responses.received(details.url, type);
+        }
+
+        callback({});
+    });
+
+    // These belong to the app, not to the server's HTML, CSS, or keyboard handlers.
+    contents.on("before-input-event", (event, input) => {
+        if (input.type === "keyDown" && input.key === "," && (process.platform === "darwin" ? input.meta : input.control) && !input.alt) {
+            event.preventDefault();
+            openSettings();
+        }
+    });
+    contents.on("context-menu", (_event, params) => {
+        Menu.buildFromTemplate([
+            { label: "Server settings…", accelerator: "CommandOrControl+,", click: openSettings },
+            { type: "separator" },
+            { role: "copy", enabled: params.selectionText !== "" },
+            ...(params.isEditable ? [{ role: "paste" as const }] : []),
+        ]).popup({ window: gui!.window });
+    });
 
     contents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
         // -3 is ERR_ABORTED: a navigation that another one replaced, not a failure.
@@ -588,13 +642,27 @@ function watchServerView(): void {
         }
     });
 
-    // A new page in the view: what the last one said (pins, badge) no longer holds, and the new one says it again.
-    contents.on("did-navigate", () => {
+    // Only a committed main-frame navigation replaces the page. Downloads and subresource errors leave it alone.
+    contents.on("did-navigate", (_event, url, status) => {
         gui?.desktop?.reset();
+        const message = responses.committed(url, status, gui?.unverified ?? false);
+
+        if (gui !== undefined && gui.loadedUrl !== undefined && message !== undefined) {
+            gui.loadedUrl = undefined;
+            gui.unverified = false;
+            stopHealth();
+            stopRetry();
+            showConfig({ kind: "load-failed", url: gui.settings.server.url, message });
+        }
     });
 
     contents.on("did-finish-load", () => {
         tellNoBridge();
+
+        // After a sign-in redirects back, detection can succeed and remove the recovery footer.
+        if (gui?.unverified) {
+            void checkAddress(gui.settings.server.url);
+        }
     });
 
     // Each document starts without the see-through CSS: give it again as soon as there is a page to give it to.
@@ -612,6 +680,7 @@ function tellNoBridge(): void {
     const probe = state.probe;
 
     if (
+        state.loadedUrl === undefined ||
         state.toldNoBridge ||
         probe?.kind !== "detected" ||
         probe.bridge > 0 ||
@@ -856,6 +925,10 @@ function createTray(): Tray {
 }
 
 function openSettings(): void {
+    if (gui !== undefined) {
+        gui.connectionAttempt++;
+    }
+
     showWindow();
     showConfig({ kind: "user" });
 }
@@ -983,16 +1056,38 @@ function registerIpc(): void {
         return configState();
     });
 
-    handle("config:connect", (_event, url) => {
+    handle("config:connect", async (_event, url, allowUnverified) => {
         if (typeof url !== "string") {
             throw new Error("Not an address");
         }
 
-        connect(url);
+        const state = gui!;
+        const attempt = ++state.connectionAttempt;
+
+        stopRetry();
+        const found = await checkAddress(url);
+
+        if (gui !== state || attempt !== state.connectionAttempt) {
+            return found;
+        }
+
+        // Enforce this at the IPC boundary too: never save/navigate to an API error or an unreachable address.
+        if (mayConnect(found, allowUnverified === true)) {
+            state.probe = found;
+            connect(found.url, found.kind !== "detected");
+        } else {
+            showConfig({ kind: "not-detected", probe: found });
+        }
+
+        return found;
     });
+
+    handle("config:open-settings", openSettings);
 
     handle("config:back", () => {
         const state = gui!;
+
+        state.connectionAttempt++;
 
         if (state.loadedUrl !== undefined) {
             state.reason = { kind: "user" };
@@ -1004,12 +1099,6 @@ function registerIpc(): void {
         stopRetry();
 
         const state = gui!;
-
-        if (state.reason.kind === "crashed") {
-            connect(state.settings.server.url);
-
-            return;
-        }
 
         state.retryAttempt = 0;
 

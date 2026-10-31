@@ -1,0 +1,87 @@
+import { strict as assert } from "node:assert";
+import { test } from "node:test";
+import { mayConnect, NavigationResponses, pageProblem } from "../main/connection";
+import type { ProbeResult } from "../shared/types";
+
+const detected: ProbeResult = { kind: "detected", url: "http://localhost:8787", bridge: 1, via: "info" };
+const other: ProbeResult = { kind: "other", url: "http://localhost:8787/api", status: 404, message: "Not Pi Pocket", canOpen: false };
+
+test("only detection or explicit permission for an unverified HTML page allows a connection", () => {
+    assert.equal(mayConnect(detected), true);
+    assert.equal(mayConnect({ ...other, canOpen: true }), false);
+    assert.equal(mayConnect({ ...other, canOpen: true }, true), true);
+
+    for (const result of [other, { kind: "invalid", url: "file:///", message: "Invalid" }, { kind: "unreachable", url: other.url, message: "Offline" }] satisfies ProbeResult[]) {
+        assert.equal(mayConnect(result), false);
+        assert.equal(mayConnect(result, true), false, "Open anyway cannot override an error/API response");
+    }
+});
+
+test("HTTP errors are failures even when Chromium successfully loads their HTML", () => {
+    for (const status of [400, 401, 403, 404, 500, 502, 503]) {
+        assert.match(pageProblem(status, "text/html") ?? "", new RegExp(`HTTP ${String(status)}`));
+    }
+});
+
+test("successful JSON, plain-text, and other non-webpage responses return to settings", () => {
+    for (const type of ["application/json", "application/problem+json; charset=utf-8", "text/plain", "application/xml"]) {
+        assert.match(pageProblem(200, type) ?? "", /not the Pi Pocket webpage/);
+        assert.notEqual(pageProblem(200, type, true), undefined);
+    }
+});
+
+test("HTML pages and intermediate redirects are not mistaken for errors", () => {
+    assert.equal(pageProblem(200, "Text/HTML; charset=UTF-8"), undefined);
+    assert.equal(pageProblem(200, "application/xhtml+xml"), undefined);
+    assert.equal(pageProblem(200, ""), undefined);
+    assert.equal(pageProblem(302, "application/json"), undefined);
+});
+
+test("attachment headers without a navigation commit do not fail the existing page", () => {
+    const navigation = new NavigationResponses();
+
+    for (const type of ["application/zip", "application/octet-stream", "application/json", "image/png", "application/pdf"]) {
+        navigation.started();
+        assert.equal(navigation.received("https://example.com/download", type), undefined);
+        // The download does not commit. The next real document must not inherit its content type.
+        navigation.started();
+        navigation.received("https://example.com/pocket", "text/html");
+        assert.equal(navigation.committed("https://example.com/pocket", 200), undefined);
+    }
+});
+
+test("only a matching committed response applies its MIME type, including URLs with fragments", () => {
+    const navigation = new NavigationResponses();
+
+    navigation.received("https://example.com/json", "application/json");
+    assert.equal(navigation.committed("https://example.com/other", 200), undefined);
+    navigation.received("https://example.com/json", "application/json");
+    assert.match(navigation.committed("https://example.com/json#pretty", 200) ?? "", /application\/json/);
+});
+
+test("redirect and aborted-download metadata does not contaminate the next document", () => {
+    const navigation = new NavigationResponses();
+
+    navigation.received("https://example.com/start", "application/json");
+    navigation.received("https://example.com/login", "text/html");
+    assert.equal(navigation.committed("https://example.com/login", 200), undefined);
+    navigation.received("https://example.com/same", "application/octet-stream");
+    navigation.started();
+    navigation.received("https://example.com/same", "text/html");
+    assert.equal(navigation.committed("https://example.com/same", 200), undefined);
+});
+
+test("committed HTTP failures still recover even if no response metadata is available", () => {
+    const navigation = new NavigationResponses();
+
+    assert.match(navigation.committed("https://example.com/error", 503) ?? "", /HTTP 503/);
+});
+
+test("an explicitly opened gateway may serve its sign-in form with HTTP 401 or 403", () => {
+    for (const status of [401, 403]) {
+        assert.equal(pageProblem(status, "text/html", true), undefined);
+        assert.notEqual(pageProblem(status, "application/json", true), undefined);
+    }
+
+    assert.notEqual(pageProblem(404, "text/html", true), undefined);
+});

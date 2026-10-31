@@ -81,6 +81,31 @@ html {
     --ground: color-mix(in srgb, var(--bg) var(--opacity), transparent);
 }
 
+/* This view becomes an app-owned footer while an unverified page is open. Server CSS cannot hide its way back. */
+body.recovering {
+    overflow: hidden;
+}
+
+.recovery-bar {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 12px;
+    border-top: 1px solid var(--hair-2);
+    background: var(--bg);
+}
+
+.recovery-bar button {
+    flex: none;
+}
+
+.recovery-bar span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .page {
     max-width: 1320px;
     margin: 0 auto;
