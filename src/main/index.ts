@@ -2,6 +2,7 @@
  * The main process. One window holds two views: the server's page (Pi Pocket itself) and the app's config screen. The
  * server's page stays loaded while the config screen shows, so going back is instant and nothing it was doing stops.
  */
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -12,6 +13,7 @@ import {
     globalShortcut,
     ipcMain,
     Menu,
+    nativeTheme,
     nativeImage,
     net,
     session,
@@ -26,7 +28,7 @@ import { retryDelayMs } from "./backoff";
 import { mayConnect, NavigationResponses } from "./connection";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
 import { setUpAppearance } from "./appearance";
-import { setUpTitleBar, titleBarOptions } from "./titlebar";
+import { parseAppsUseLightTheme, setUpTitleBar, titleBarOptions } from "./titlebar";
 import { loadTheme, sameTheme, saveTheme } from "./theme";
 import { setUpDesktop } from "./desktop";
 import { setUpLocalServer } from "./local-server";
@@ -221,6 +223,17 @@ async function start(): Promise<void> {
         style: titleBarAtStart,
         window,
         server: server.webContents,
+        theme,
+        nativeTheme,
+        systemScheme: () =>
+            new Promise((resolve) => {
+                execFile(
+                    "reg",
+                    ["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "/v", "AppsUseLightTheme"],
+                    { windowsHide: true, timeout: 3000 },
+                    (_error, stdout) => resolve(parseAppsUseLightTheme(String(stdout))),
+                );
+            }),
     });
 
     gui.appearance = setUpAppearance({
@@ -912,6 +925,9 @@ function openServerWindow(url: string): void {
     };
 
     guardContents(child.webContents, policy, openServerWindow);
+    // The caption buttons' nativeTheme is process-wide: this window is given the system's scheme, and until it is,
+    // nativeTheme stays "system" (src/main/titlebar.ts). Registered before loading, which the protocol needs first.
+    void state.titleBar?.followSystemScheme(child.webContents);
     void child.loadURL(url);
 }
 
