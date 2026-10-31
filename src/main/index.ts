@@ -9,6 +9,7 @@ import {
     app,
     BaseWindow,
     BrowserWindow,
+    clipboard,
     dialog,
     globalShortcut,
     ipcMain,
@@ -20,6 +21,7 @@ import {
     shell,
     Tray,
     WebContentsView,
+    type ContextMenuParams,
     type IpcMainInvokeEvent,
     type MenuItemConstructorOptions,
     type WebContents,
@@ -28,7 +30,19 @@ import type { ConfigReason, ConfigState, DictationAction, LocalAction, ProbeResu
 import { retryDelayMs } from "./backoff";
 import { mayConnect, NavigationResponses } from "./connection";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
-import { contextMenuTemplate } from "./context-menu";
+import { contextMenuTemplate, type ClickInfo, type MenuActions } from "./context-menu";
+import {
+    eventCovered,
+    MENU_WORLD,
+    menuScript,
+    menuSheet,
+    PAGE_CLICK_WAIT_MS,
+    pageClickInfo,
+    pickScript,
+    readPageClick,
+    runPicked,
+    themedGroups,
+} from "./themed-menu";
 import { setUpAppearance } from "./appearance";
 import { parseAppsUseLightTheme, setUpTitleBar, titleBarOptions } from "./titlebar";
 import { loadTheme, sameTheme, saveTheme } from "./theme";
@@ -350,6 +364,30 @@ async function start(): Promise<void> {
             state.appearance?.themeChanged();
             state.titleBar?.themeChanged(next);
             pushConfigState();
+        },
+        pageRightClick: (input) => {
+            const click = readPageClick(input);
+            const at = Date.now();
+
+            if (click === undefined) {
+                return;
+            }
+
+            // Electron's event, where it fires, comes with the spelling: wait a moment for it, and open from the
+            // page's report only when it did not come (macOS).
+            setTimeout(() => {
+                const contents = gui?.server.webContents;
+
+                if (contents === undefined || contents.isDestroyed() || eventCovered(contextMenuEventAt.get(contents.id), at)) {
+                    return;
+                }
+
+                void clipboardHasContent().then((pasteable) => {
+                    if (gui !== undefined && !contents.isDestroyed()) {
+                        openContextMenu(gui.window, contents, pageClickInfo(click, pasteable), click, { openSettings });
+                    }
+                });
+            }, PAGE_CLICK_WAIT_MS);
         },
     });
 
@@ -839,7 +877,8 @@ function watchServerView(): void {
         }
     });
     contents.on("context-menu", (_event, params) => {
-        Menu.buildFromTemplate(contextMenuTemplate(params, { ...spelling(contents), openSettings })).popup({ window: gui!.window });
+        contextMenuEventAt.set(contents.id, Date.now());
+        openContextMenu(gui!.window, contents, params, params, { openSettings });
     });
 
     contents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
@@ -942,6 +981,75 @@ function originOf(url: string): string | undefined {
     }
 }
 
+/** When each page's last `context-menu` event came: a report from its preload for the same click then opens nothing. */
+const contextMenuEventAt = new Map<number, number>();
+
+/** The menus drawn so far: each is waited for by its number. */
+let menusDrawn = 0;
+
+/**
+ * The right-click menu on one of the server's pages: `contextMenuTemplate`'s items, drawn in the page in Pi Pocket's
+ * theme (src/main/themed-menu.ts). Where the page cannot draw it, the same template pops up as the native menu.
+ */
+function openContextMenu(
+    window: BaseWindow,
+    contents: WebContents,
+    click: ClickInfo,
+    at: { x: number; y: number },
+    actions: Pick<MenuActions, "openSettings">,
+): void {
+    const template = contextMenuTemplate(click, { ...spelling(contents), ...actions });
+    const native = (): void => {
+        if (!contents.isDestroyed() && !window.isDestroyed()) {
+            Menu.buildFromTemplate(template).popup({ window });
+        }
+    };
+    const mac = process.platform === "darwin";
+    const key = ++menusDrawn;
+    const script = menuScript(key, {
+        groups: themedGroups(template, mac),
+        x: at.x,
+        y: at.y,
+        label: "Pi Pocket",
+        sheet: menuSheet(gui!.theme),
+    });
+
+    contents.executeJavaScriptInIsolatedWorld(MENU_WORLD, [{ code: script }], true).then(
+        (shown: unknown) => {
+            if (shown !== true) {
+                native();
+
+                return;
+            }
+
+            contents.executeJavaScriptInIsolatedWorld(MENU_WORLD, [{ code: pickScript(key) }], true).then(
+                (id: unknown) => {
+                    if (!contents.isDestroyed()) {
+                        runPicked(template, id, {
+                            cut: () => contents.cut(),
+                            copy: () => contents.copy(),
+                            paste: () => contents.paste(),
+                            selectAll: () => contents.selectAll(),
+                        });
+                    }
+                },
+                // The page went away with the menu open: there is nothing left to act on.
+                () => undefined,
+            );
+        },
+        native,
+    );
+}
+
+/** Something to paste: what Chromium checks before it enables Paste. */
+async function clipboardHasContent(): Promise<boolean> {
+    try {
+        return (await clipboard.read()).some((item) => item.types.length > 0);
+    } catch {
+        return true;
+    }
+}
+
 /** The right-click menu's spelling actions on a page: replace the word clicked, or add it to the dictionary. */
 function spelling(contents: WebContents): { replace: (word: string) => void; learn: (word: string) => void } {
     return {
@@ -980,8 +1088,8 @@ function openServerWindow(url: string): void {
     };
 
     guardContents(child.webContents, policy, openServerWindow);
-    child.webContents.on("context-menu", (_event, params) => {
-        Menu.buildFromTemplate(contextMenuTemplate(params, spelling(child.webContents))).popup({ window: child });
+    child.webContents.on("context-menu", (_event, params: ContextMenuParams) => {
+        openContextMenu(child, child.webContents, params, params, {});
     });
     // The caption buttons' nativeTheme is process-wide: this window is given the system's scheme, and until it is,
     // nativeTheme stays "system" (src/main/titlebar.ts). Registered before loading, which the protocol needs first.
