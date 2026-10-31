@@ -16,9 +16,9 @@ Provider keys never leave the main server. A computer that executes needs no key
 | Decision | Why |
 |---|---|
 | **Run there, execute here** (not: run here, show there). | The provider keys stay only on the main server. |
-| **The app bundles a full Pi Pocket.** | New users get a server with the app. The code that runs on this computer ships with the app, versioned and known: the server never sends code. |
-| **Two modes, one at a time, no switching.** Standalone: the bundled Pi Pocket is the server. Remote: the app opens a main server, and the bundled Pi Pocket only executes for it. | Simple to explain, nothing to merge, no second set of sessions on this computer while in remote mode. |
-| **The bundled Pi Pocket runs while the app runs** (in the tray when the window is closed, at login when that is on). | When the app quits, standalone sessions stop and Pi Durable picks them up at the next start; remote sessions wait for the computer. |
+| **The app installs a full Pi Pocket on this computer** (downloaded from npm when first needed, kept current; see [../local-server.md](../local-server.md)). | New users get a server with the app. The code that runs on this computer is a released Pi Pocket, versioned and known: the server never sends code. |
+| **Two modes, one at a time, no switching.** Standalone: this computer's Pi Pocket is the server. Remote: the app opens a main server, and this computer's Pi Pocket only executes for it. | Simple to explain, nothing to merge, no second set of sessions on this computer while in remote mode. |
+| **This computer's Pi Pocket runs while the app runs** (in the tray when the window is closed, at login when that is on). | When the app quits, standalone sessions stop and Pi Durable picks them up at the next start; remote sessions wait for the computer. |
 | **A session's place is fixed when it is made.** A remote session executes on its computer for its whole life; it never moves to the server or to another computer. | Nothing to migrate, and no question of where a step ran. |
 | **This computer is offered for remote work only when you turn it on** (Settings → Remote execution, shown only in remote mode). | Executing for a server is a real permission: opt in, never by default. |
 | **Each new remote session on a computer needs a yes on that computer.** The app shows a dialog: who, which session, which folder. A folder said yes to joins the computer's allowed list. | Someone signed in as you elsewhere cannot start work on, or widen access to, your computer without you at it. |
@@ -37,7 +37,7 @@ Main Pi Pocket server                              This computer
 │                                   │               │   (window, tray, settings)    │
 │ execution environments            │               │          │ starts, stops      │
 │   "server"  → local ExecutionEnv  │   WebSocket   │          ▼                    │
-│   "runner"  → RemoteExecutionEnv ◄├───────────────┤► runner (bundled Pi Pocket,   │
+│   "runner"  → RemoteExecutionEnv ◄├───────────────┤► runner (local Pi Pocket,    │
 │                                   │  (runner      │   runner mode): files,        │
 │ runner registry, keys, policy     │   dials out)  │   commands, git, request log  │
 └──────────────────────────────────┘               └──────────────────────────────┘
@@ -49,20 +49,20 @@ Three pieces, each usable without the others:
    states. No Electron, no server, no file system. Both sides import it.
 2. **The runner** (`pi-pocket/src/remote/runner`, started as `pi-pocket runner`): connects out to a server with its
    key, carries out requests through Pi Durable's `ExecutionEnv` on its own computer, and keeps the request log. It
-   knows nothing about the app. The app starts it as a child process (Electron's Node, `ELECTRON_RUN_AS_NODE=1`); a
+   knows nothing about the app. The app starts it as a child process (with the Node.js it installed for Pi Pocket); a
    deployable runner is the same command under systemd, launchd, or a container.
 3. **The server side** (`pi-pocket/src/remote/host`): accepts runners, keeps the registry of computers and their keys,
    and gives a session a `RemoteExecutionEnv` that sends each tool call to that session's runner. It plugs in where the
    session's `ExecutionEnv` is chosen today (`Harness.open({ env })`), so the tools do not change.
 
-All three live in Pi Pocket itself (the app bundles Pi Pocket, and the server side must be there anyway). The app adds
+All three live in Pi Pocket itself (the app installs Pi Pocket, and the server side must be there anyway). The app adds
 only: start and stop the runner, link this computer in Settings, and show its state in the tray.
 
 ## Settings
 
 **The app (Pi Pocket desktop):**
 
-- **Server:** this computer (the bundled Pi Pocket, standalone) or the address of a main server (remote). One or the
+- **Server:** this computer (Pi Pocket installed by the app, standalone) or the address of a main server (remote). One or the
   other.
 - **Remote execution** (remote mode only): offer this computer to the main server. On: the app links itself (its
   sign-in gets the runner its key) and starts the runner. Off: the runner stops and its key is revoked. Below it, this
@@ -70,7 +70,7 @@ only: start and stop the runner, link this computer in Settings, and show its st
 
 In standalone mode, the server is on this computer and executes here already: nothing to link.
 
-**The Pi Pocket server, Settings → Runners** (on any Pi Pocket, the bundled one included):
+**The Pi Pocket server, Settings → Runners** (on any Pi Pocket, the one the app installs included):
 
 - Every computer that executes for this server: the desktop apps that linked themselves and the runners linked by hand,
   with their state, last seen, owner, and allowed folders. Revoke one, or remove a folder.
@@ -128,7 +128,7 @@ in any shared session. The owner can turn it off at any time. Ownership never mo
 
 ### 1. Not knowing what happened after a drop
 
-- ★ **Every request has an ID; the runner keeps a durable log of them** (in the bundled Pi Pocket's data folder):
+- ★ **Every request has an ID; the runner keeps a durable log of them** (in this computer's Pi Pocket data folder):
   received, started, finished with its result. After a reconnect, the server asks about each request in flight and gets
   the result, "still running" (output resumes where it stopped), "killed when the app quit", or "never received". Only
   the last is sent again.
@@ -195,13 +195,13 @@ in any shared session. The owner can turn it off at any time. Ownership never mo
 
 ## Size
 
-Pi Pocket 0.27.0 is about 12 MB unpacked; bundled with its production dependencies the app grows by tens of MB. Not a
-concern.
+The app itself stays small: Pi Pocket and a Node.js for it are downloaded when first needed (about 60 MB, about
+400 MB on disk).
 
 ## Order of work
 
-1. **Bundled Pi Pocket, standalone mode:** the app ships Pi Pocket, starts it with Electron's Node, and opens it. New
-   users need no separate install.
+1. **Pi Pocket on this computer, standalone mode** ([../local-server.md](../local-server.md)): the app downloads Pi
+   Pocket and a Node.js for it, keeps them current, starts it, and opens it. New users need no separate install.
 2. **The protocol and the runner** in Pi Pocket, with the request log, tested against a local server.
 3. **The server side:** runner registry, keys, linking, `RemoteExecutionEnv`, the owner rule.
 4. **Sessions on a computer:** the session keeps its computer; New session offers the computers; offline handling.
