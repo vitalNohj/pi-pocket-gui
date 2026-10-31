@@ -49,7 +49,7 @@ export const DEFAULT_THEME: ThemeColors = {
 
 const HEX = /^#[0-9a-f]{6}([0-9a-f]{2})?$/;
 
-/** The page's colors, checked: every token, each as #rrggbb or #rrggbbaa. Anything else is dropped whole. */
+/** The page's colors: every token as #rrggbb[aa], and readable on the app's surfaces. Otherwise dropped whole. */
 export function readTheme(input: unknown): ThemeColors | undefined {
     if (typeof input !== "object" || input === null) {
         return undefined;
@@ -78,6 +78,22 @@ export function readTheme(input: unknown): ThemeColors | undefined {
         result[token] = result[token].slice(0, 7);
     }
 
+    // A missing/invalid CSS variable can resolve to inherited black; a failed canvas read can give transparent
+    // pixels. Neither is a usable palette, even though every value is valid hex. Check saved themes and IPC alike.
+    // 1.5:1 is only a safety floor, not an accessibility audit; include alpha and the actual settings surfaces.
+    const readable = (ink: ThemeToken, surface: ThemeToken): boolean =>
+        contrast(result[ink], result[surface], result.bg) >= 1.5;
+
+    for (const ink of ["text", "body", "muted", "accent", "brand", "ok", "warn", "err"] as const) {
+        if (!(["desk", "bg", "card"] as const).every((surface) => readable(ink, surface))) {
+            return undefined;
+        }
+    }
+
+    if (!readable("text", "code-bg") || !readable("accent-ink", "accent-fill")) {
+        return undefined;
+    }
+
     return { mode, colors: result };
 }
 
@@ -103,6 +119,38 @@ export function saveTheme(path: string, theme: ThemeColors): void {
     } catch {
         // Only a look for the next start: without it, the default shows until the server sends its own.
     }
+}
+
+type Rgb = { r: number; g: number; b: number };
+
+/** A token painted over the surface beneath it. */
+function composite(hex: string, ground: Rgb): Rgb {
+    const color = rgbOf(hex);
+    const alpha = hex.length === 9 ? Number.parseInt(hex.slice(7, 9), 16) / 255 : 1;
+
+    return {
+        r: color.r * alpha + ground.r * (1 - alpha),
+        g: color.g * alpha + ground.g * (1 - alpha),
+        b: color.b * alpha + ground.b * (1 - alpha),
+    };
+}
+
+function luminance(color: Rgb): number {
+    const linear = (channel: number): number => {
+        const value = channel / 255;
+
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    };
+
+    return 0.2126 * linear(color.r) + 0.7152 * linear(color.g) + 0.0722 * linear(color.b);
+}
+
+function contrast(ink: string, surface: string, ground: string): number {
+    const paper = composite(surface, rgbOf(ground));
+    const a = luminance(composite(ink, paper));
+    const b = luminance(paper);
+
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
 /** "#rrggbb" as numbers. */

@@ -90,6 +90,18 @@ function watchTheme(): void {
 
     const read = (): void => {
         const root = document.documentElement;
+        const style = getComputedStyle(root);
+
+        // The configured origin can also serve an error, sign-in, or unrelated page. A missing/invalid var()
+        // inherits its text color (often black), which is not a theme. Wait for a complete palette instead.
+        if (TOKENS.some((token) => {
+            const value = style.getPropertyValue(`--${token}`).trim();
+
+            return value === "" || !CSS.supports("color", value);
+        })) {
+            return;
+        }
+
         const probe = document.createElement("span");
         const canvas = document.createElement("canvas");
 
