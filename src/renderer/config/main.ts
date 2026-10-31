@@ -924,6 +924,11 @@ function modelRow(model: DictationModelState, busy: boolean): HTMLElement {
         }
 
         button("Remove", "remove", "secondary danger");
+
+        // Removing waits for a download: they share the engine.
+        for (const each of buttons.querySelectorAll("button")) {
+            each.disabled = busy;
+        }
     } else {
         button("Download", "download");
         buttons.querySelector("button")!.disabled = busy;

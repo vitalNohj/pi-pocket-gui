@@ -59,3 +59,16 @@ test("the chosen model is a known id or none", () => {
     assert.equal(bad.problems.length, 2);
     assert.ok(modelById("parakeet-tdt-0.6b-v2")?.recommended);
 });
+
+test("each model file has one role: no two config fields name the same file", () => {
+    for (const model of MODELS) {
+        const paths = JSON.stringify(modelConfig(model, "/m", 2, join)).match(/"\/m\/[^"]+"/g) ?? [];
+
+        assert.equal(new Set(paths).size, paths.length, model.id);
+    }
+
+    const moonshine = modelConfig(modelById("moonshine-base-en")!, "/m", 2, join).moonshine as Record<string, string>;
+
+    assert.equal(moonshine.cachedDecoder, join("/m", "cached_decode.int8.onnx"));
+    assert.equal(moonshine.uncachedDecoder, join("/m", "uncached_decode.int8.onnx"));
+});

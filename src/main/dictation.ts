@@ -389,6 +389,14 @@ export function setUpDictation(host: DictationHost) {
             if (worker === child) {
                 message = (error as Error).message;
                 status = "error";
+
+                // The dictation waiting for this model ends: the page stops its microphone.
+                if (active !== undefined) {
+                    host.toPage({ id: active, type: "error", error: message });
+                    host.toPage({ id: active, type: "end" });
+                    active = undefined;
+                }
+
                 worker.kill();
                 worker = undefined;
                 workerModel = undefined;
@@ -520,11 +528,17 @@ export function setUpDictation(host: DictationHost) {
 
                     break;
                 case "remove":
+                    // A download writes under the same folder, and the last model's removal takes the engine.
+                    if (download !== undefined) {
+                        throw new Error("Wait for the download to end, or cancel it, before removing a model.");
+                    }
+
                     await removeModel(model.id);
                     break;
                 case "use":
                     if (installed.has(model.id)) {
                         host.choose(model.id);
+                        host.changed();
                     }
 
                     break;

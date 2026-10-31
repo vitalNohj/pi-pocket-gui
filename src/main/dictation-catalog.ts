@@ -244,7 +244,9 @@ export function engineSize(platform: string, arch: string): number {
 /** sherpa-onnx's model config for a model in a folder (src/main/dictation-worker.ts passes it on). */
 export function modelConfig(model: SpeechModel, folder: string, threads: number, join: (...parts: string[]) => string): Record<string, unknown> {
     const file = (name: string) => join(folder, name);
-    const named = (suffix: string) => file(model.files.find((each) => each.name.endsWith(suffix))?.name ?? suffix);
+    // A file by the end of its name, matched at a word's start: "cached_decode" must not find "uncached_decode".
+    const named = (suffix: string) =>
+        file(model.files.find((each) => each.name === suffix || each.name.endsWith(`-${suffix}`))?.name ?? suffix);
     const common = { numThreads: threads, provider: "cpu", debug: 0 };
 
     switch (model.family) {
