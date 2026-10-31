@@ -102,6 +102,8 @@ export interface TitleBarHost {
  */
 export class SchemeGuard {
     private readonly pages = new Map<WebContents, boolean>();
+    /** Pages already gone: a check that finishes after one closed must not add it back (and block the override). */
+    private readonly gone = new WeakSet<WebContents>();
     private system: "dark" | "light" | undefined;
     private wanted: "dark" | "light" | undefined;
 
@@ -125,11 +127,16 @@ export class SchemeGuard {
 
     /** Whether this page is now given the system's scheme. A page not compensated keeps the override off. */
     mark(page: WebContents, compensated: boolean): void {
+        if (this.gone.has(page)) {
+            return;
+        }
+
         this.pages.set(page, compensated);
         this.apply();
     }
 
     forget(page: WebContents): void {
+        this.gone.add(page);
         this.pages.delete(page);
         this.apply();
     }

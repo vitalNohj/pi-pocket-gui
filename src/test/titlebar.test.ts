@@ -74,6 +74,25 @@ test("nativeTheme is forced only while every server page is given the system's s
     assert.equal(native.themeSource, "light");
 });
 
+test("a check that finishes after its window closed does not block the override", () => {
+    const native = { themeSource: "system" as "system" | "dark" | "light" };
+    const guard = new SchemeGuard(native);
+    const main = {} as WebContents;
+    const child = {} as WebContents;
+
+    guard.want("dark");
+    guard.setSystem("light");
+    guard.mark(main, true);
+    guard.mark(child, false);
+    guard.forget(child);
+    assert.equal(native.themeSource, "dark");
+    // The in-flight emulation of the closed window resolves (or fails) late.
+    guard.mark(child, false);
+    assert.equal(native.themeSource, "dark");
+    guard.mark(child, true);
+    assert.equal(native.themeSource, "dark");
+});
+
 test("without a caption scheme, nativeTheme is never touched", () => {
     const native = { themeSource: "system" as "system" | "dark" | "light" };
     const guard = new SchemeGuard(native);
