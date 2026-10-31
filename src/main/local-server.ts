@@ -24,6 +24,12 @@ import {
 } from "./local-versions";
 
 const REGISTRY = "https://registry.npmjs.org/pi-pocket/latest";
+/**
+ * Where Pi Pocket comes from. For now the fork's branch, which has the desktop bridge; npm's official release later,
+ * once it has the bridge (set this to "npm": that path is kept as it is).
+ */
+const SOURCE: "fork" | "npm" = "fork";
+const FORK = { repo: "vitalNohj/pi-pocket", branch: "live-0.28" };
 const NODE_INDEX = "https://nodejs.org/dist/index.json";
 /** Pi Pocket's exit code for a problem in how it was started (a port in use, a held data folder): retrying won't help. */
 const CONFIG_ERROR = 78;
@@ -54,6 +60,15 @@ export interface LocalHost {
 interface Runtime {
     id: string;
     node: string;
+    /** The fork's commit it was installed from (fork builds only). */
+    commit?: string;
+}
+
+/** What to install: a Pi Pocket version, the npm spec to install it by, and the fork's commit for a fork build. */
+interface PocketBuild {
+    version: string;
+    spec: string;
+    commit?: string;
 }
 
 interface Current {
@@ -169,8 +184,22 @@ export function setUpLocalServer(host: LocalHost) {
     };
 
     /** The newest Pi Pocket, and the newest Node.js LTS it runs on, for this computer. */
-    const latest = async (): Promise<{ pocket: string; node: NodeDownload }> => {
-        const manifest = await fetchJson<{ version: string; engines?: { node?: string } }>(REGISTRY);
+    /** The fork branch's newest commit, and its package.json. */
+    const forkLatest = async (): Promise<{ manifest: { version: string; engines?: { node?: string } }; build: PocketBuild }> => {
+        const head = await fetchJson<{ sha: string }>(`https://api.github.com/repos/${FORK.repo}/commits/${FORK.branch}`);
+        const manifest = await fetchJson<{ version: string; engines?: { node?: string } }>(
+            `https://raw.githubusercontent.com/${FORK.repo}/${head.sha}/package.json`,
+        );
+
+        return {
+            manifest,
+            build: { version: manifest.version, spec: `https://codeload.github.com/${FORK.repo}/tar.gz/${head.sha}`, commit: head.sha },
+        };
+    };
+
+    const latest = async (): Promise<{ pocket: string; build: PocketBuild; node: NodeDownload }> => {
+        const fork = SOURCE === "fork" ? await forkLatest() : undefined;
+        const manifest = fork?.manifest ?? (await fetchJson<{ version: string; engines?: { node?: string } }>(REGISTRY));
         const releases = await fetchJson<NodeRelease[]>(NODE_INDEX);
         const engines = manifest.engines?.node ?? ">=22.19";
         const node = pickNode(releases, engines, host.platform, host.arch);
@@ -179,7 +208,7 @@ export function setUpLocalServer(host: LocalHost) {
             throw new Error(`No Node.js release for ${host.platform} ${host.arch} meets Pi Pocket's need (${engines}).`);
         }
 
-        return { pocket: manifest.version, node };
+        return { pocket: manifest.version, build: fork?.build ?? { version: manifest.version, spec: `pi-pocket@${manifest.version}` }, node };
     };
 
     /** Runs a command to its end; its last lines of output are the error when it fails. */
@@ -214,7 +243,7 @@ export function setUpLocalServer(host: LocalHost) {
     };
 
     /** Builds a runtime with these versions, in a folder of its own that takes its name only once whole. */
-    const build = async (versions: { pocket: string; node: NodeDownload }, step: (text: string, percent?: number) => void): Promise<Runtime> => {
+    const build = async (versions: { pocket: string; build: PocketBuild; node: NodeDownload }, step: (text: string, percent?: number) => void): Promise<Runtime> => {
         await mkdir(downloads, { recursive: true });
         await mkdir(runtimes, { recursive: true });
 
@@ -255,7 +284,7 @@ export function setUpLocalServer(host: LocalHost) {
             await extract(archive, partial);
 
             const unpacked = join(partial, versions.node.folder);
-            const runtime: Runtime = { id, node: versions.node.version };
+            const runtime: Runtime = { id, node: versions.node.version, ...(versions.build.commit === undefined ? {} : { commit: versions.build.commit }) };
             const where = runtimePaths(unpacked, host.platform);
 
             step(`Installing Pi Pocket ${versions.pocket}…`);
@@ -270,7 +299,7 @@ export function setUpLocalServer(host: LocalHost) {
                     "--no-audit",
                     "--no-fund",
                     "--loglevel=error",
-                    `pi-pocket@${versions.pocket}`,
+                    versions.build.spec,
                 ],
                 {
                     cwd: unpacked,
@@ -407,7 +436,9 @@ export function setUpLocalServer(host: LocalHost) {
             const versions = await latest();
             const installed = current.next ?? current.current;
             const pocket = (current.next === undefined ? pocketVersion(current.current) : pocketVersion(current.next)) ?? "0.0.0";
-            const newerPocket = compareVersions(versions.pocket, pocket) > 0;
+            // A fork build is new when its commit is; an npm release when its version is higher.
+            const newerPocket =
+                versions.build.commit !== undefined ? versions.build.commit !== installed.commit : compareVersions(versions.pocket, pocket) > 0;
             const newerNode = compareVersions(versions.node.version, installed.node) > 0;
 
             if (!newerPocket && !newerNode) {
