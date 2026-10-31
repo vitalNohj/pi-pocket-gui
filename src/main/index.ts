@@ -26,7 +26,7 @@ import {
     type MenuItemConstructorOptions,
     type WebContents,
 } from "electron";
-import type { ConfigReason, ConfigState, LocalAction, ProbeResult, Settings, SettingsProblem, ThemeColors, TitleBarStyle } from "../shared/types";
+import type { ConfigReason, ConfigState, DictationAction, LocalAction, ProbeResult, Settings, SettingsProblem, ThemeColors, TitleBarStyle } from "../shared/types";
 import { retryDelayMs } from "./backoff";
 import { mayConnect, NavigationResponses } from "./connection";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
@@ -47,6 +47,7 @@ import { setUpAppearance } from "./appearance";
 import { parseAppsUseLightTheme, setUpTitleBar, titleBarOptions } from "./titlebar";
 import { loadTheme, sameTheme, saveTheme } from "./theme";
 import { setUpDesktop } from "./desktop";
+import { setUpDictation } from "./dictation";
 import { setUpLocalServer } from "./local-server";
 import { setUpUpdates } from "./updates";
 import { setLaunchAtLogin, startedAtLogin, trayAvailable } from "./platform";
@@ -125,6 +126,8 @@ interface Gui {
     toldNoBridge: boolean;
     /** Pi Pocket on this computer (src/main/local-server.ts). */
     local: ReturnType<typeof setUpLocalServer> | undefined;
+    /** Offline dictation (src/main/dictation.ts). */
+    dictation: ReturnType<typeof setUpDictation> | undefined;
     /** The login link was opened: the next page drops it from the view's history. */
     signingIn: boolean;
 }
@@ -231,6 +234,7 @@ async function start(): Promise<void> {
         themePath,
         toldNoBridge: false,
         local: undefined,
+        dictation: undefined,
         signingIn: false,
     };
 
@@ -278,6 +282,33 @@ async function start(): Promise<void> {
         },
     });
 
+    gui.dictation = setUpDictation({
+        home: app.getPath("userData"),
+        platform: process.platform,
+        arch: process.arch,
+        settings: () => gui!.settings,
+        choose: (model) => {
+            const state = gui!;
+
+            state.settings = { ...state.settings, dictation: { ...state.settings.dictation, model } };
+            saveSettings(state.configPath, state.settings);
+        },
+        fetch: (url) => net.fetch(url, { headers: { "user-agent": `pi-pocket-gui/${app.getVersion()}` } }),
+        fromServerPage: (event) => gui?.desktop?.fromServerPage(event) === true,
+        toPage: (message) => {
+            if (!server.webContents.isDestroyed()) {
+                server.webContents.send("host:dictation", message);
+            }
+        },
+        changed: () => {
+            pushConfigState();
+        },
+        needModel: () => {
+            openSettings();
+            gui?.config.webContents.send("config:focus", "dictation");
+        },
+    });
+
     gui.local = setUpLocalServer({
         home: join(app.getPath("userData"), "server"),
         platform: process.platform,
@@ -320,6 +351,7 @@ async function start(): Promise<void> {
         quit,
         updateItem: () => gui?.updates?.trayItem() ?? gui?.local?.trayItem(),
         theme: () => gui!.theme,
+        dictation: () => gui?.dictation?.state().supported === true,
         themeChanged: (next) => {
             const state = gui!;
 
@@ -435,6 +467,7 @@ async function start(): Promise<void> {
     }
     app.on("will-quit", () => {
         globalShortcut.unregisterAll();
+        gui?.dictation?.quit();
     });
 
     registerIpc();
@@ -711,6 +744,7 @@ function configState(): ConfigState {
         appVersion: app.getVersion(),
         update: state.updates?.state() ?? { method: "source", status: "idle" },
         local: state.local!.state(),
+        dictation: state.dictation!.state(),
     };
 }
 
@@ -1371,6 +1405,7 @@ function registerIpc(): void {
         state.problems = checked.problems;
         saveSettings(state.configPath, state.settings);
         applyDesktopSettings(before);
+        state.dictation?.settingsChanged();
         state.updates?.reschedule();
         state.local?.rescheduleUpdates();
 
@@ -1473,6 +1508,38 @@ function registerIpc(): void {
         }
 
         return localAction(action as LocalAction);
+    });
+
+    handle("config:dictation", (_event, action) => {
+        const value = action as Partial<DictationAction> | null;
+
+        if (
+            typeof value !== "object" ||
+            value === null ||
+            typeof value.id !== "string" ||
+            !["download", "cancel", "remove", "use"].includes(String(value.type))
+        ) {
+            throw new Error("Not an action");
+        }
+
+        // A download runs on: its progress shows through the state.
+        const done = gui!.dictation!.act(value as DictationAction);
+
+        if (value.type === "download") {
+            done.catch((error: unknown) => {
+                console.error(error);
+            });
+
+            return undefined;
+        }
+
+        return done;
+    });
+
+    handle("config:show-dictation-folder", () => {
+        const folder = gui!.dictation!.state().folder;
+
+        void shell.openPath(existsSync(folder) ? folder : app.getPath("userData"));
     });
 
     handle("config:choose-folder", async (_event, start) => {

@@ -60,6 +60,238 @@ if (hello !== null && typeof hello === "object") {
 
     watchTheme();
     reportRightClicks();
+
+    if (hello.dictation) {
+        offerDictation();
+    }
+}
+
+/** What the main process sends about one dictation (src/main/dictation.ts, PageMessage). */
+type DictationMessage =
+    | { id: number; type: "result"; text: string; final: boolean }
+    | { id: number; type: "error"; error: string }
+    | { id: number; type: "end" };
+
+/**
+ * Offline dictation: stands in the browser's SpeechRecognition (Electron has no speech service of its own), so Pi
+ * Pocket's mic button and Alt+V work unchanged. The microphone is read here, at 16 kHz, and goes to the main process,
+ * which recognises it on this computer.
+ */
+function offerDictation(): void {
+    let next = 0;
+    const listeners = new Map<number, (message: DictationMessage) => void>();
+    const captures = new Map<number, () => void>();
+
+    const release = (id: number): void => {
+        captures.get(id)?.();
+        captures.delete(id);
+    };
+
+    ipcRenderer.on("host:dictation", (_event, message: DictationMessage) => {
+        const listener = listeners.get(message.id);
+
+        if (message.type === "end") {
+            release(message.id);
+            listeners.delete(message.id);
+        }
+
+        try {
+            listener?.(message);
+        } catch (error) {
+            console.error(error);
+        }
+    });
+
+    const capture = async (id: number): Promise<void> => {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        });
+
+        // Stopped while the microphone was asked for.
+        if (!listeners.has(id)) {
+            stream.getTracks().forEach((track) => track.stop());
+
+            return;
+        }
+
+        // The browser resamples the microphone to the model's rate. A script processor needs no module, which a page's
+        // content security policy could block.
+        const context = new AudioContext({ sampleRate: 16_000 });
+        const source = context.createMediaStreamSource(stream);
+        const processor = context.createScriptProcessor(2048, 1, 1);
+        const mute = context.createGain();
+
+        mute.gain.value = 0;
+        processor.onaudioprocess = (event) => {
+            ipcRenderer.send("host:dictation-audio", id, new Float32Array(event.inputBuffer.getChannelData(0)));
+        };
+        source.connect(processor);
+        processor.connect(mute);
+        mute.connect(context.destination);
+
+        captures.set(id, () => {
+            processor.onaudioprocess = null;
+            source.disconnect();
+            processor.disconnect();
+            stream.getTracks().forEach((track) => track.stop());
+            void context.close();
+        });
+    };
+
+    const dictation = {
+        /** Starts listening; returns the dictation's number. `listener` hears its results, errors, and end. */
+        start: (listener: unknown): number => {
+            const id = ++next;
+
+            if (typeof listener !== "function") {
+                return id;
+            }
+
+            listeners.set(id, listener as (message: DictationMessage) => void);
+
+            const fail = (error: string): void => {
+                release(id);
+                ipcRenderer.send("host:dictation-stop", id, true);
+                (listener as (message: DictationMessage) => void)({ id, type: "error", error });
+                (listener as (message: DictationMessage) => void)({ id, type: "end" });
+                listeners.delete(id);
+            };
+
+            void (ipcRenderer.invoke("host:dictation-start", id) as Promise<{ ok?: true; error?: string }>).then(
+                async (answer) => {
+                    if (answer.error !== undefined) {
+                        fail(answer.error);
+
+                        return;
+                    }
+
+                    try {
+                        await capture(id);
+                    } catch (error) {
+                        const name = (error as Error).name;
+
+                        fail(name === "NotAllowedError" ? "not-allowed" : name === "NotFoundError" ? "audio-capture" : (error as Error).message);
+                    }
+                },
+                (error: unknown) => {
+                    fail((error as Error).message);
+                },
+            );
+
+            return id;
+        },
+        /** Stops listening; the words said so far are still recognised, unless `drop`. */
+        stop: (id: unknown, drop: unknown): void => {
+            if (typeof id === "number" && listeners.has(id)) {
+                release(id);
+                ipcRenderer.send("host:dictation-stop", id, drop === true);
+            }
+        },
+    };
+
+    contextBridge.executeInMainWorld({ func: installRecognition, args: [dictation] });
+}
+
+/**
+ * Runs in the page's own world: a SpeechRecognition with the calls Pi Pocket's web/voice.js makes (lang, continuous,
+ * interimResults, start, stop, abort, onresult, onerror, onend). Self-contained: it is sent to the page as source.
+ */
+function installRecognition(dictation: {
+    start: (listener: (message: DictationMessage) => void) => number;
+    stop: (id: number, drop: boolean) => void;
+}): void {
+    interface Alternative {
+        transcript: string;
+        confidence: number;
+    }
+
+    const result = (transcript: string, isFinal: boolean) => {
+        const alternative: Alternative = { transcript, confidence: 1 };
+
+        return Object.assign([alternative], { isFinal, item: (index: number) => (index === 0 ? alternative : null) });
+    };
+
+    class OfflineSpeechRecognition extends EventTarget {
+        lang = "";
+        continuous = false;
+        interimResults = false;
+        maxAlternatives = 1;
+        onresult: ((event: Event) => void) | null = null;
+        onerror: ((event: Event) => void) | null = null;
+        onend: ((event: Event) => void) | null = null;
+        onstart: ((event: Event) => void) | null = null;
+        #id: number | undefined;
+        #finals: ReturnType<typeof result>[] = [];
+
+        start(): void {
+            if (this.#id !== undefined) {
+                throw new DOMException("Dictation has already started.", "InvalidStateError");
+            }
+
+            this.#finals = [];
+
+            const id = dictation.start((message) => {
+                if (this.#id !== id) {
+                    return;
+                }
+
+                if (message.type === "result") {
+                    if (message.text === "" || (!message.final && !this.interimResults)) {
+                        return;
+                    }
+
+                    const heard = result(message.text, message.final);
+                    const results = [...this.#finals, heard];
+
+                    if (message.final) {
+                        this.#finals.push(heard);
+                    }
+
+                    this.#fire("result", { resultIndex: this.#finals.length - (message.final ? 1 : 0), results: Object.assign(results, { item: (index: number) => results[index] ?? null }) });
+
+                    if (message.final && !this.continuous) {
+                        this.stop();
+                    }
+                } else if (message.type === "error") {
+                    this.#fire("error", { error: message.error, message: message.error });
+                } else {
+                    this.#id = undefined;
+                    this.#fire("end", {});
+                }
+            });
+
+            this.#id = id;
+            queueMicrotask(() => {
+                this.#fire("start", {});
+            });
+        }
+
+        stop(): void {
+            if (this.#id !== undefined) {
+                dictation.stop(this.#id, false);
+            }
+        }
+
+        abort(): void {
+            if (this.#id !== undefined) {
+                dictation.stop(this.#id, true);
+            }
+        }
+
+        #fire(type: string, fields: Record<string, unknown>): void {
+            const event = Object.assign(new Event(type), fields);
+            const handler = (this as unknown as Record<string, unknown>)[`on${type}`];
+
+            if (typeof handler === "function") {
+                (handler as (event: Event) => void).call(this, event);
+            }
+
+            this.dispatchEvent(event);
+        }
+    }
+
+    Object.defineProperty(globalThis, "SpeechRecognition", { value: OfflineSpeechRecognition, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "webkitSpeechRecognition", { value: OfflineSpeechRecognition, configurable: true, writable: true });
 }
 
 /**

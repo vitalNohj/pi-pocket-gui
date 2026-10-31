@@ -18,6 +18,10 @@ export interface DownloadRequest {
     size?: number;
     fetch: (url: string) => Promise<Response>;
     onProgress?: (percent: number) => void;
+    /** Bytes as they arrive, for progress over several files. */
+    onBytes?: (received: number) => void;
+    /** Stops the download; the part already written is removed. */
+    signal?: AbortSignal;
 }
 
 /** Downloads, checks, and returns the file's path. Throws on a failed request or a wrong checksum. */
@@ -46,8 +50,14 @@ export async function downloadChecked(request: DownloadRequest): Promise<string>
                 break;
             }
 
+            if (request.signal?.aborted === true) {
+                await reader.cancel();
+                throw new Error("The download was cancelled.");
+            }
+
             hash.update(value);
             received += value.length;
+            request.onBytes?.(received);
 
             if (!out.write(value)) {
                 await new Promise<void>((resolve) => out.once("drain", resolve));
