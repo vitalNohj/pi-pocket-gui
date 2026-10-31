@@ -11,7 +11,9 @@ import {
     ipcMain,
     Menu,
     nativeImage,
+    nativeTheme,
     Notification,
+    systemPreferences,
     type BaseWindow,
     type IpcMainEvent,
     type IpcMainInvokeEvent,
@@ -25,6 +27,8 @@ import { cornerDot, dotBitmap, paintDot, tint } from "./badge-image";
 import { readTheme, rgbOf } from "./theme";
 import { pinLabel, readBadge, readNotification, readPinned } from "./bridge-input";
 import { offersAllow, showCall } from "./notice-text";
+import { buildTrayMenu, readAccent } from "./tray-menu";
+import { setUpTrayPopup } from "./tray-popup";
 
 /** What the bridge needs from the rest of the app. */
 export interface DesktopHost {
@@ -140,12 +144,33 @@ export function setUpDesktop(host: DesktopHost): {
         return trayIcons;
     };
 
+    // The tray is created after this runs (createTray), so the clicks are attached on the first refresh, once.
+    let clicksAttached = false;
+
+    const attachClicks = (tray: Tray): void => {
+        if (clicksAttached || process.platform !== "win32") {
+            return;
+        }
+
+        clicksAttached = true;
+        // The left-click handler lives in createTray and shows or hides the window. A right-click opens the menu, and
+        // the next left-click closes it first, so the window does not also move.
+        tray.on("right-click", () => popup?.toggle());
+        tray.on("click", () => {
+            if (popup?.isOpen() === true) {
+                popup.close();
+            }
+        });
+    };
+
     const refreshTray = (): void => {
         const tray = host.tray();
 
         if (tray === undefined || tray.isDestroyed()) {
             return;
         }
+
+        attachClicks(tray);
 
         const pinItems: MenuItemConstructorOptions[] = pins.map((pin) => ({
             label: pinLabel(pin),
@@ -165,10 +190,43 @@ export function setUpDesktop(host: DesktopHost): {
             { label: "Quit", click: host.quit },
         ];
 
-        tray.setContextMenu(Menu.buildFromTemplate(template));
+        if (process.platform === "win32") {
+            // A native Win32 menu cannot be restyled, so Windows gets the popup. It opens on click and on right-click.
+            tray.setContextMenu(null);
+        } else {
+            tray.setContextMenu(Menu.buildFromTemplate(template));
+        }
+
         tray.setImage(badge > 0 ? icons().dot : icons().plain);
         tray.setToolTip(badge > 0 ? `Pi Pocket — ${badge} ${badge === 1 ? "session needs" : "sessions need"} you` : "Pi Pocket");
+        popup?.refresh();
     };
+
+    const menuModel = () =>
+        buildTrayMenu({
+            badge,
+            update: host.updateItem(),
+            pins,
+            showWindow: host.showWindow,
+            openSettings: host.openSettings,
+            quit: host.quit,
+            openPin: open,
+        });
+
+    // Windows only. macOS and Linux keep the native menu above, and the trayMenu setting is ignored there.
+    const popup =
+        process.platform === "win32"
+            ? setUpTrayPopup({
+                  tray: host.tray,
+                  menu: menuModel,
+                  style: () => host.settings().appearance.trayMenu,
+                  windowsDark: () => nativeTheme.shouldUseDarkColors,
+                  theme: host.theme,
+                  accent: () => readAccent(systemPreferences.getAccentColor()),
+                  activate: (id) => menuModel().actions.find((action) => action.id === id)?.run(),
+                  focusTray: () => host.tray()?.focus(),
+              })
+            : undefined;
 
     const setBadge = (count: number): void => {
         badge = count;

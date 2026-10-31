@@ -804,7 +804,8 @@ function renderAppearance(next: ConfigState): void {
     const live = appearance.translucent && support.kind === "live";
 
     for (const row of element("appearance-card").querySelectorAll<HTMLElement>(".row")) {
-        if (row.contains(toggle) || row.id === "translucent-restart") {
+        // The tray menu is its own setting: it stays usable while translucency is off.
+        if (row.contains(toggle) || row.id === "translucent-restart" || row.id === "tray-menu-row") {
             continue;
         }
 
