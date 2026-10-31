@@ -22,11 +22,13 @@ import {
     WebContentsView,
     type IpcMainInvokeEvent,
     type MenuItemConstructorOptions,
+    type WebContents,
 } from "electron";
 import type { ConfigReason, ConfigState, LocalAction, ProbeResult, Settings, SettingsProblem, ThemeColors, TitleBarStyle } from "../shared/types";
 import { retryDelayMs } from "./backoff";
 import { mayConnect, NavigationResponses } from "./connection";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
+import { contextMenuTemplate } from "./context-menu";
 import { setUpAppearance } from "./appearance";
 import { parseAppsUseLightTheme, setUpTitleBar, titleBarOptions } from "./titlebar";
 import { loadTheme, sameTheme, saveTheme } from "./theme";
@@ -803,12 +805,7 @@ function watchServerView(): void {
         }
     });
     contents.on("context-menu", (_event, params) => {
-        Menu.buildFromTemplate([
-            { label: "Server settings…", accelerator: "CommandOrControl+,", click: openSettings },
-            { type: "separator" },
-            { role: "copy", enabled: params.selectionText !== "" },
-            ...(params.isEditable ? [{ role: "paste" as const }] : []),
-        ]).popup({ window: gui!.window });
+        Menu.buildFromTemplate(contextMenuTemplate(params, { ...spelling(contents), openSettings })).popup({ window: gui!.window });
     });
 
     contents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
@@ -911,6 +908,14 @@ function originOf(url: string): string | undefined {
     }
 }
 
+/** The right-click menu's spelling actions on a page: replace the word clicked, or add it to the dictionary. */
+function spelling(contents: WebContents): { replace: (word: string) => void; learn: (word: string) => void } {
+    return {
+        replace: (word) => contents.replaceMisspelling(word),
+        learn: (word) => contents.session.addWordToSpellCheckerDictionary(word),
+    };
+}
+
 /** Opens one of the server's own pages that asked for a new window: in a plain window of this app, or outside. */
 function openServerWindow(url: string): void {
     const state = gui!;
@@ -941,6 +946,9 @@ function openServerWindow(url: string): void {
     };
 
     guardContents(child.webContents, policy, openServerWindow);
+    child.webContents.on("context-menu", (_event, params) => {
+        Menu.buildFromTemplate(contextMenuTemplate(params, spelling(child.webContents))).popup({ window: child });
+    });
     // The caption buttons' nativeTheme is process-wide: this window is given the system's scheme, and until it is,
     // nativeTheme stays "system" (src/main/titlebar.ts). Registered before loading, which the protocol needs first.
     void state.titleBar?.followSystemScheme(child.webContents);
