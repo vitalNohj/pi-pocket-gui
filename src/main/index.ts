@@ -750,6 +750,9 @@ function openServerWindow(url: string): void {
     };
 
     guardContents(child.webContents, policy, openServerWindow);
+    // The caption buttons' nativeTheme is process-wide: this window is given the system's scheme, and until it is,
+    // nativeTheme stays "system" (src/main/titlebar.ts). Registered before loading, which the protocol needs first.
+    void state.titleBar?.followSystemScheme(child.webContents);
     void child.loadURL(url);
 }
 

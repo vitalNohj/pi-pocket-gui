@@ -95,28 +95,121 @@ export interface TitleBarHost {
     systemScheme?: () => Promise<"dark" | "light">;
 }
 
+/**
+ * nativeTheme.themeSource is process-wide: it also sets prefers-color-scheme in every page. It is forced to Pi Pocket's
+ * mode (for the caption buttons) only while every server page is known to be given the system's scheme instead;
+ * otherwise it stays "system", so a page never sees the wrong scheme.
+ */
+export class SchemeGuard {
+    private readonly pages = new Map<WebContents, boolean>();
+    private system: "dark" | "light" | undefined;
+    private wanted: "dark" | "light" | undefined;
+
+    constructor(private readonly native: { themeSource: "system" | "dark" | "light" } | undefined) {}
+
+    /** The system's scheme, which every page keeps seeing; undefined until read. */
+    get systemScheme(): "dark" | "light" | undefined {
+        return this.system;
+    }
+
+    setSystem(scheme: "dark" | "light"): void {
+        this.system = scheme;
+        this.apply();
+    }
+
+    /** The caption buttons' scheme, or undefined to leave nativeTheme alone. */
+    want(scheme: "dark" | "light" | undefined): void {
+        this.wanted = scheme;
+        this.apply();
+    }
+
+    /** Whether this page is now given the system's scheme. A page not compensated keeps the override off. */
+    mark(page: WebContents, compensated: boolean): void {
+        this.pages.set(page, compensated);
+        this.apply();
+    }
+
+    forget(page: WebContents): void {
+        this.pages.delete(page);
+        this.apply();
+    }
+
+    private apply(): void {
+        if (this.native === undefined || this.wanted === undefined) {
+            return;
+        }
+
+        const safe = this.system !== undefined && [...this.pages.values()].every(Boolean);
+        const next = safe ? this.wanted : "system";
+
+        if (this.native.themeSource !== next) {
+            this.native.themeSource = next;
+        }
+    }
+}
+
 export function setUpTitleBar(host: TitleBarHost): {
     /** How far down the server's view starts: 0, unless its page could not be told of the band. */
     offset: () => number;
     themeChanged: (theme: ThemeColors) => void;
+    /** Another server page (a window it opened): give it the system's scheme before it loads. */
+    followSystemScheme: (page: WebContents) => Promise<void>;
 } {
     if (host.style === "system") {
-        return { offset: () => 0, themeChanged: () => undefined };
+        return { offset: () => 0, themeChanged: () => undefined, followSystemScheme: async () => undefined };
     }
 
     const contents = host.server;
     const band = bandHeight(host.platform);
     let failed = false;
     let theme = host.theme;
-    /** The system's scheme, which the page keeps seeing while nativeTheme follows Pi Pocket's mode for the buttons. */
-    let system: "dark" | "light" | undefined;
+    const guard = new SchemeGuard(host.nativeTheme);
+    const caption = () => captionScheme(host.platform, host.style, theme);
 
-    const applyCaption = () => {
-        const scheme = captionScheme(host.platform, host.style, theme);
+    /** Give a page the system's scheme over the debugger; until that succeeds, the guard keeps the override off. */
+    const emulate = async (page: WebContents): Promise<void> => {
+        const scheme = guard.systemScheme;
 
-        if (scheme !== undefined && host.nativeTheme !== undefined && host.nativeTheme.themeSource !== scheme) {
-            host.nativeTheme.themeSource = scheme;
+        if (caption() === undefined || page.isDestroyed()) {
+            return;
         }
+
+        if (scheme === undefined) {
+            guard.mark(page, false);
+
+            return;
+        }
+
+        try {
+            if (!page.debugger.isAttached()) {
+                page.debugger.attach("1.3");
+            }
+
+            // A page with nothing loaded yet may not answer: the override stays off rather than wait forever.
+            await Promise.race([
+                page.debugger.sendCommand("Emulation.setEmulatedMedia", {
+                    features: [{ name: "prefers-color-scheme", value: scheme }],
+                }),
+                new Promise((_done, fail) => setTimeout(() => fail(new Error("timeout")), 3000)),
+            ]);
+            guard.mark(page, !page.isDestroyed() && page.debugger.isAttached() && guard.systemScheme === scheme);
+        } catch {
+            guard.mark(page, false);
+        }
+    };
+
+    const follow = (page: WebContents): void => {
+        guard.mark(page, false);
+        page.once("destroyed", () => guard.forget(page));
+        // Emulation lasts only while attached: off at once on detach, back once given again.
+        page.debugger.on("detach", () => {
+            guard.mark(page, false);
+            setTimeout(() => void emulate(page), 500);
+        });
+        page.on("render-process-gone", () => {
+            guard.mark(page, false);
+            void emulate(page);
+        });
     };
     /** Whether the page now shown makes its own room. Kept across loads of the same origin: the next one likely does too. */
     let ownRoom = false;
@@ -136,13 +229,6 @@ export function setUpTitleBar(host: TitleBarHost): {
             }
 
             await contents.debugger.sendCommand("Emulation.setSafeAreaInsetsOverride", { insets: { top: inset() } });
-
-            // nativeTheme also sets prefers-color-scheme: give the page the system's own, so a theme's pair still follows it.
-            if (system !== undefined) {
-                await contents.debugger.sendCommand("Emulation.setEmulatedMedia", {
-                    features: [{ name: "prefers-color-scheme", value: system }],
-                });
-            }
         } catch (error) {
             if (!failed) {
                 failed = true;
@@ -207,20 +293,32 @@ export function setUpTitleBar(host: TitleBarHost): {
 
     // The system's setting can change while the app runs: read it again when the window comes back to the front.
     const readSystem = async () => {
-        if (captionScheme(host.platform, host.style, theme) === undefined || host.systemScheme === undefined) {
+        if (caption() === undefined || host.systemScheme === undefined) {
             return;
         }
 
-        const next = await host.systemScheme().catch(() => system ?? "light");
+        const next = await host.systemScheme().catch(() => guard.systemScheme ?? "light");
 
-        if (next !== system) {
-            system = next;
-            await tell();
+        if (next !== guard.systemScheme) {
+            // Off until every page is given the new scheme.
+            for (const page of pages) {
+                guard.mark(page, false);
+            }
+
+            guard.setSystem(next);
+            await Promise.all([...pages].map(emulate));
         }
     };
+    const pages = new Set<WebContents>([contents]);
 
+    if (caption() !== undefined) {
+        follow(contents);
+        contents.once("destroyed", () => pages.delete(contents));
+    }
+
+    guard.want(caption());
     host.window.on("focus", () => void readSystem());
-    void readSystem().then(applyCaption);
+    void readSystem();
     void tell();
 
     return {
@@ -232,10 +330,19 @@ export function setUpTitleBar(host: TitleBarHost): {
                 host.window.setTitleBarOverlay(overlayColors(next));
             }
 
-            // Only once the page is told the system's scheme, or a theme pair would flip with the override.
-            if (system !== undefined) {
-                applyCaption();
+            guard.want(caption());
+        },
+        followSystemScheme: async (page) => {
+            if (caption() === undefined) {
+                return;
             }
+
+            pages.add(page);
+            page.once("destroyed", () => pages.delete(page));
+            follow(page);
+            // Given again once its first document starts, in case the protocol did not answer before it had one.
+            page.once("did-start-navigation", () => void emulate(page));
+            await emulate(page);
         },
     };
 }
