@@ -3,7 +3,39 @@ import { test } from "node:test";
 import { validateSettings } from "../main/settings";
 import { DEFAULT_THEME } from "../main/theme";
 import type { WebContents } from "electron";
-import { bandHeight, captionScheme, OVERLAY_HEIGHT, parseAppsUseLightTheme, SchemeGuard, titleBarOptions, TRAFFIC_LIGHTS } from "../main/titlebar";
+import {
+    bandHeight,
+    captionScheme,
+    NOTCH_CSS,
+    NOTCH_GAP,
+    NOTCH_SHAPE,
+    OVERLAY_HEIGHT,
+    parseAppsUseLightTheme,
+    SchemeGuard,
+    titleBarOptions,
+    TRAFFIC_LIGHTS,
+} from "../main/titlebar";
+
+test("the notch cuts the tiled window under the controls, on their side, only where corner-shape is supported", () => {
+    assert.match(NOTCH_CSS, /^@supports \(corner-shape: notch\) \{/);
+
+    for (const [side, corner] of [
+        ["right", "top-right"],
+        ["left", "top-left"],
+    ]) {
+        const rule = new RegExp(
+            String.raw`:root\[data-tiling="on"\]\[data-window-controls="${side}"\] \.layout > :has\(\[data-under-controls="bar"\]\) \{[^}]*border-${corner}-radius:[^}]*corner-${corner}-shape: ${NOTCH_SHAPE.replace(/[()]/g, "\\$&")};`,
+        );
+
+        assert.match(NOTCH_CSS, rule);
+    }
+
+    // As deep as the controls reach below the tiles' gap, plus the gap to them; both sides the same depth.
+    const depth = `calc(env(titlebar-area-y, 0px) + env(titlebar-area-height, 0px) - var(--gap-out, 8px) + ${NOTCH_GAP}px)`;
+    assert.equal(NOTCH_CSS.split(depth).length - 1, 2);
+    assert.ok(NOTCH_CSS.includes("calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)"));
+    assert.ok(NOTCH_CSS.includes(`calc(env(titlebar-area-x, 0px) - var(--gap-out, 8px) + ${NOTCH_GAP}px)`));
+});
 
 test("seamless on macOS: hidden title bar, the traffic lights near the corner, told to the page as an overlay", () => {
     const options = titleBarOptions("darwin", "seamless", DEFAULT_THEME);
