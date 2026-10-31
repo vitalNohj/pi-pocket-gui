@@ -718,3 +718,11 @@ details.log pre {
     white-space: pre-wrap;
     word-break: break-all;
 }
+
+button.danger {
+    color: var(--err);
+}
+
+#local-uninstall-row {
+    margin-top: 12px;
+}

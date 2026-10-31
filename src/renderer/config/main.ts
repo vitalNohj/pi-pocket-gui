@@ -399,6 +399,7 @@ function renderLocal(next: ConfigState): void {
     show("open", local.status === "external");
     show("restart", local.status === "running");
     show("stop", local.status === "running" || local.status === "starting");
+    element("local-uninstall-row").hidden = !installed || local.status === "installing" || local.status === "stopping";
     element("local-show").hidden = !(local.status === "running" && next.connectedUrl !== undefined);
     element("local-restart-row").hidden = !local.restartNeeded;
 

@@ -568,6 +568,22 @@ async function localAction(action: LocalAction): Promise<void> {
         case "use-remote":
             await useMode("remote");
             break;
+        case "uninstall": {
+            const { response } = await dialog.showMessageBox(state.window, {
+                type: "warning",
+                message: "Uninstall Pi Pocket from this computer?",
+                detail: `This stops it and removes what the app installed for it: Node.js and Pi Pocket (${local.state().home}).\n\nYour sessions, settings, and sign-in stay in Pi Pocket's data folder. Install puts it back.`,
+                buttons: ["Uninstall", "Cancel"],
+                defaultId: 1,
+                cancelId: 1,
+            });
+
+            if (response === 0) {
+                await local.uninstall();
+            }
+
+            break;
+        }
     }
 }
 
@@ -1334,7 +1350,7 @@ function registerIpc(): void {
     handle("config:update-action", () => gui!.updates?.act());
 
     handle("config:local", (_event, action) => {
-        const actions: LocalAction[] = ["install", "start", "stop", "restart", "open", "check-updates", "show-log", "use-local", "use-remote"];
+        const actions: LocalAction[] = ["install", "start", "stop", "restart", "open", "check-updates", "show-log", "use-local", "use-remote", "uninstall"];
 
         if (typeof action !== "string" || !(actions as string[]).includes(action)) {
             throw new Error("Not an action");

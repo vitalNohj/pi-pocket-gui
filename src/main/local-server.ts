@@ -871,6 +871,29 @@ export function setUpLocalServer(host: LocalHost) {
         stop,
         restart,
         checkUpdates: () => checkUpdates(true),
+        /**
+         * Removes what the app installed (the runtimes with Node.js and Pi Pocket, the downloads, the log): stops it
+         * first. Pi Pocket's data folder (sessions, settings, sign-in) stays.
+         */
+        uninstall: async (): Promise<void> => {
+            if (building !== undefined) {
+                throw new Error("An install is under way. Wait for it to end.");
+            }
+
+            clearTimeout(updateTimer);
+            await stop();
+            child = undefined;
+            await rm(runtimes, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+            await rm(downloads, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+            await rm(currentFile, { force: true });
+            await rm(pidFile, { force: true });
+            await rm(logFile, { force: true });
+            lines = [];
+            url = undefined;
+            update = { status: "idle" };
+            set("absent");
+            host.down();
+        },
         rescheduleUpdates: scheduleUpdates,
         /** The tray's line for a new version waiting for a restart. */
         trayItem: (): { label: string; click: () => void } | undefined =>

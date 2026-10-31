@@ -225,7 +225,8 @@ export type LocalAction =
     | "check-updates"
     | "show-log"
     | "use-local"
-    | "use-remote";
+    | "use-remote"
+    | "uninstall";
 
 /** A pinned session's state, as the square in Pi Pocket's session list shows it (`data-state`). */
 export type PinState = "waiting" | "limited" | "working" | "failed" | "fresh" | "seen";
