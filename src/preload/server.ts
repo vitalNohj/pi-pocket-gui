@@ -59,6 +59,49 @@ if (hello !== null && typeof hello === "object") {
     });
 
     watchTheme();
+    reportRightClicks();
+}
+
+/**
+ * The page's own right-click, for the app's menu (src/main/themed-menu.ts). Electron's `context-menu` event opens the
+ * menu wherever it fires; macOS has been known not to fire it for this view, and then this report is what opens it.
+ * Only a right-click the page left alone: Pi Pocket's own menus (a session row's) call preventDefault, and the
+ * listener runs after theirs, as the event bubbles. A right-click, a two-finger click, and a Control+click on macOS
+ * all arrive as this one event.
+ */
+function reportRightClicks(): void {
+    document.addEventListener("contextmenu", (event) => {
+        if (event.defaultPrevented) {
+            return;
+        }
+
+        const field = textField(event.target);
+        const selection = field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement
+            ? field.value.slice(field.selectionStart ?? 0, field.selectionEnd ?? 0)
+            : document.getSelection()?.toString() ?? "";
+
+        ipcRenderer.send("host:context-menu", {
+            x: event.clientX,
+            y: event.clientY,
+            isEditable: field !== undefined,
+            selectionText: selection,
+        });
+    });
+}
+
+const TEXT_INPUTS = new Set(["", "text", "search", "url", "tel", "email", "password", "number"]);
+
+/** The text field a right-click landed in, the way Chromium decides what is editable; none on anything else. */
+function textField(target: EventTarget | null): HTMLElement | undefined {
+    if (!(target instanceof HTMLElement)) {
+        return undefined;
+    }
+
+    if (target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && TEXT_INPUTS.has(target.type))) {
+        return target.readOnly || target.disabled ? undefined : target;
+    }
+
+    return target.isContentEditable ? target : undefined;
 }
 
 // The tokens src/main/theme.ts takes. A preload cannot import a module of its own, so the list is here too.

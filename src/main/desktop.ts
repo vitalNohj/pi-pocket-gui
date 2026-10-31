@@ -49,6 +49,8 @@ export interface DesktopHost {
     theme: () => ThemeColors;
     /** The server's page shows other colors. */
     themeChanged: (theme: ThemeColors) => void;
+    /** A right-click the page left alone, as its preload saw it (src/main/themed-menu.ts reads it). */
+    pageRightClick: (click: unknown) => void;
 }
 
 function originOf(url: string): string | undefined {
@@ -248,6 +250,12 @@ export function setUpDesktop(host: DesktopHost): {
     ipcMain.on("host:invoke", (event, id: unknown) => {
         if (fromServerPage(event) && id === "server-settings") {
             host.openSettings();
+        }
+    });
+
+    ipcMain.on("host:context-menu", (event, click: unknown) => {
+        if (fromServerPage(event)) {
+            host.pageRightClick(click);
         }
     });
 
