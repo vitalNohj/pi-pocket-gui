@@ -19,7 +19,10 @@ Provider keys never leave the main server. A computer that executes needs no key
 | **The app bundles a full Pi Pocket.** | New users get a server with the app. The code that runs on this computer ships with the app, versioned and known: the server never sends code. |
 | **Two modes, one at a time, no switching.** Standalone: the bundled Pi Pocket is the server. Remote: the app opens a main server, and the bundled Pi Pocket only executes for it. | Simple to explain, nothing to merge, no second set of sessions on this computer while in remote mode. |
 | **The bundled Pi Pocket runs while the app runs** (in the tray when the window is closed, at login when that is on). | When the app quits, standalone sessions stop and Pi Durable picks them up at the next start; remote sessions wait for the computer. |
-| **Only the session's owner can make a remote session execute.** No exception by default. | Nobody else's message, schedule, or hook runs anything on someone's computer. |
+| **A session's place is fixed when it is made.** A remote session executes on its computer for its whole life; it never moves to the server or to another computer. | Nothing to migrate, and no question of where a step ran. |
+| **This computer is offered for remote work only when you turn it on** (Settings → Remote execution, shown only in remote mode). | Executing for a server is a real permission: opt in, never by default. |
+| **Only the session's owner can make a remote session execute.** A per-session switch, off by default, lets the others in the session prompt it too. No handover of sessions. | Nobody else's message, schedule, or hook runs anything on someone's computer unless its owner allowed it for that session. |
+| **Folders are allowed per computer, not per session.** The list starts empty and grows as you pick folders. | One list per computer to check and to prune. |
 | **The execution layer is its own part, not part of the app.** | The same runner serves the app today and, later, a deployable runner (a VPS, a container, a CI machine) linked to the same sessions. |
 | **Each computer gets its own key**, got through the existing sign-in, with no extra step in the app. | See [Verification](#verification). |
 
@@ -72,9 +75,12 @@ the one-time code to paste (`pi-pocket runner link <server> <code>`).
 
 ## How a remote session works
 
-1. In the app, connect to the main server (remote mode). The app links this computer the first time, as above.
+1. In the app, connect to the main server (remote mode), then turn on Settings → Remote execution. The app links this
+   computer, as above. Turning it off stops the runner and revokes its key.
 2. The runner connects out to the server and stays connected. No port opens on this computer.
-3. On the server, New session → the computer ("Maya's MacBook") → a folder. The folders come from the runner.
+3. On the server, New session → the computer ("Maya's MacBook") → a folder. The folders come from the runner. A folder
+   not yet on the computer's allowed list is added to it when picked; the list is in the app's Settings and on the
+   server's page for that computer, where folders can be removed.
 4. The agent runs on the server with the server's keys. Each tool call goes to the runner, runs on this computer, and
    the result comes back. The session and its history are on the server.
 5. While the computer is asleep, offline, or the app is closed, the session shows "MacBook offline", waits, and has a
@@ -83,6 +89,12 @@ the one-time code to paste (`pi-pocket runner link <server> <code>`).
 **The owner rule:** only the session's owner (the person who made it) can start a turn in a remote session. Others in
 the session can watch and chat; their messages cannot start the agent. Schedules, hooks, goals, and subagents of a
 remote session act as the owner and only for the owner. A runner accepts work only for sessions owned by its own person.
+
+**Letting others prompt:** the owner can turn on "Others can prompt this session" for one session (off by default, with
+a warning that their messages then run things on the owner's computer). They can then prompt it and see its output, as
+in any shared session. The owner can turn it off at any time. Ownership never moves.
+
+**Subagents and linked sessions** started by a remote session execute on the same computer, with the same owner.
 
 ## Problems and solutions
 
@@ -172,7 +184,11 @@ concern.
 
 ## Open questions
 
-See the end of the conversation of 2026-10-31; answers go here as they come.
+1. With a local server (standalone mode), what does Settings show for remote execution: nothing, or only the runner
+   (to offer this computer to another server while it is also a standalone server)?
+2. Adding a folder to a computer's allowed list happens on the server (in New session). Should a new folder also need
+   a yes on the computer itself (a notification from the app), so that someone signed in as you elsewhere cannot widen
+   it?
 
 ## Research
 
