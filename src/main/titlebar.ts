@@ -79,6 +79,38 @@ export function parseAppsUseLightTheme(output: string): "dark" | "light" {
     return /AppsUseLightTheme\s+REG_DWORD\s+0x0+\b/i.test(output) ? "dark" : "light";
 }
 
+/** How far the notch stays clear of the controls, in CSS pixels. */
+export const NOTCH_GAP = 6;
+
+/** The notch's corner: rounder than a square cut, sharper than a quarter circle. */
+export const NOTCH_SHAPE = "superellipse(-5)";
+
+/**
+ * For a page that makes room for the controls itself (Pi Pocket's web/window-controls.js): tiled, the window whose bar
+ * runs under the controls has its border, and its focus ring, cut around them instead of through them. Its corner on
+ * the controls' side becomes a notch as deep and as wide as the controls reach into it, plus a small gap.
+ *
+ * Only what that page documents for desktop apps decides where: data-window-controls on its root ("left" on macOS,
+ * "right" on Windows and Linux) and data-under-controls="bar" on the bar under them. Their size is the overlay's
+ * (env(titlebar-area-*)). A page without those marks, a window without a bar under the controls (it starts below
+ * them), or a Chromium without corner-shape keeps its corner as it was.
+ */
+export const NOTCH_CSS = `@supports (corner-shape: notch) {
+    :root[data-tiling="on"][data-window-controls="right"] .layout > :has([data-under-controls="bar"]) {
+        border-top-right-radius:
+            calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) - var(--gap-out, 8px) + ${NOTCH_GAP}px)
+            calc(env(titlebar-area-y, 0px) + env(titlebar-area-height, 0px) - var(--gap-out, 8px) + ${NOTCH_GAP}px);
+        corner-top-right-shape: ${NOTCH_SHAPE};
+    }
+
+    :root[data-tiling="on"][data-window-controls="left"] .layout > :has([data-under-controls="bar"]) {
+        border-top-left-radius:
+            calc(env(titlebar-area-x, 0px) - var(--gap-out, 8px) + ${NOTCH_GAP}px)
+            calc(env(titlebar-area-y, 0px) + env(titlebar-area-height, 0px) - var(--gap-out, 8px) + ${NOTCH_GAP}px);
+        corner-top-left-shape: ${NOTCH_SHAPE};
+    }
+}`;
+
 /** Whether the page makes room for the controls itself: Pi Pocket's web/window-controls.js marks its root. */
 const OWN_ROOM = `document.documentElement.hasAttribute("data-window-controls")`;
 
@@ -286,6 +318,7 @@ export function setUpTitleBar(host: TitleBarHost): {
     // A module script runs before DOMContentLoaded, so the mark is there by then; checked again once it all loads.
     contents.on("dom-ready", () => {
         void contents.insertCSS(DRAG_CSS).catch(() => undefined);
+        void contents.insertCSS(NOTCH_CSS).catch(() => undefined);
         void check();
     });
     contents.on("did-finish-load", () => void check());
