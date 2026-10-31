@@ -5,7 +5,8 @@
  * - install: electron-updater downloads it and installs it when the app restarts (Windows, a Linux AppImage, and a
  *   macOS app signed by an Apple team). The app asks before it restarts.
  * - download: macOS without a team signature, which Squirrel.Mac refuses to update. The app downloads the disk image
- *   for this Mac, checks it against GitHub's checksum, and opens it; the person drags the app over the old one.
+ *   for this Mac, checks it against GitHub's checksum, opens it, and quits: macOS cannot replace a running app, so the
+ *   person drags the new one over the old one only once this one is gone.
  * - page: a Linux .deb opens the release page. source: a checkout run with `npm start` says to `git pull`.
  */
 import { execFile } from "node:child_process";
@@ -30,6 +31,9 @@ export interface UpdateHost {
     /** Before the app quits to install: closing must not hide it in the tray. */
     quitting: () => void;
 }
+
+/** How long a quit to install may take before the app exits anyway: nothing may keep it running over the update. */
+const QUIT_LIMIT_MS = 5_000;
 
 /** Whether this macOS app is signed by an Apple team (not ad hoc), which Squirrel.Mac needs to update it. */
 function teamSigned(): Promise<boolean> {
@@ -144,6 +148,49 @@ export function setUpUpdates(host: UpdateHost): {
         }
     };
 
+    /**
+     * Opens the disk image, then quits: the app in Applications cannot be replaced while it runs. When macOS cannot open
+     * the image, it shows it in Finder instead and the app stays.
+     */
+    const openAndQuit = async (image: string): Promise<void> => {
+        const failed = await shell.openPath(image);
+
+        if (failed !== "") {
+            shell.showItemInFolder(image);
+            void dialog.showMessageBox(host.window(), {
+                type: "warning",
+                title: "Pi Pocket",
+                message: "The disk image did not open.",
+                detail: `${failed} It is shown in Finder: quit Pi Pocket, open the image, and drag Pi Pocket into Applications over the old one.`,
+                buttons: ["OK"],
+            });
+
+            return;
+        }
+
+        host.quitting();
+        app.quit();
+        // A window or a handler that holds the quit must not keep the old app running under the person's drag.
+        setTimeout(() => app.exit(0), QUIT_LIMIT_MS).unref();
+    };
+
+    /** The disk image is here: quit and open it now, or later from the Updates card or the tray. */
+    const askToOpen = async (version: string, image: string): Promise<void> => {
+        const { response } = await dialog.showMessageBox(host.window(), {
+            type: "info",
+            title: "Pi Pocket",
+            message: `Pi Pocket ${version} is downloaded.`,
+            detail: "Pi Pocket quits and opens the disk image. Drag Pi Pocket into Applications over the old one, then open it again. Your settings and sign-in stay.",
+            buttons: ["Quit and open", "Later"],
+            defaultId: 0,
+            cancelId: 1,
+        });
+
+        if (response === 0) {
+            await openAndQuit(image);
+        }
+    };
+
     const checkRelease = async (): Promise<void> => {
         const response = await net.fetch(LATEST, {
             headers: { accept: "application/vnd.github+json", "user-agent": `pi-pocket-gui/${app.getVersion()}` },
@@ -233,7 +280,7 @@ export function setUpUpdates(host: UpdateHost): {
 
         // download: the disk image for this Mac.
         if (downloaded !== undefined) {
-            void shell.openPath(downloaded);
+            await openAndQuit(downloaded);
 
             return;
         }
@@ -261,12 +308,7 @@ export function setUpUpdates(host: UpdateHost): {
                 onProgress: (percent) => set({ percent }),
             });
             set({ status: "ready", percent: 100 });
-
-            const failed = await shell.openPath(downloaded);
-
-            if (failed !== "") {
-                shell.showItemInFolder(downloaded);
-            }
+            await askToOpen(release.version, downloaded);
         } catch (error) {
             set({ status: "error", message: (error as Error).message });
         }
@@ -310,9 +352,11 @@ export function setUpUpdates(host: UpdateHost): {
             const label =
                 state.status === "ready" && method === "install"
                     ? `Restart to update to ${state.version}`
-                    : method === "download"
-                      ? `Download Pi Pocket ${state.version}…`
-                      : `Pi Pocket ${state.version} is available…`;
+                    : state.status === "ready" && method === "download"
+                      ? `Quit and install Pi Pocket ${state.version}…`
+                      : method === "download"
+                        ? `Download Pi Pocket ${state.version}…`
+                        : `Pi Pocket ${state.version} is available…`;
 
             return { label, click: () => void act() };
         },

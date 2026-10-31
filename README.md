@@ -100,7 +100,7 @@ The settings are also a JSON file you can edit by hand. A value that is not vali
 The app looks for a new release at start and every 6 hours (Settings → Updates → **Check now**).
 
 - **Windows and the AppImage** download it and install it when the app restarts. The app asks first.
-- **macOS:** until the app is signed by Apple, macOS will not let it replace itself. It downloads the new disk image to Downloads, checked against GitHub's checksum, and opens it: drag the app into Applications over the old one. Your settings and sign-in stay.
+- **macOS:** until the app is signed by Apple, macOS will not let it replace itself. It downloads the new disk image to Downloads, checked against GitHub's checksum, then quits and opens it (macOS cannot replace an app that is running): drag the app into Applications over the old one, then open it again. Your settings and sign-in stay.
 - **The .deb** opens the release page: install the new .deb the same way.
 
 ## How it talks to Pi Pocket
