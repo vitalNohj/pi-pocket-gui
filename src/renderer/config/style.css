@@ -726,3 +726,47 @@ button.danger {
 #local-uninstall-row {
     margin-top: 12px;
 }
+
+/* Dictation: the speech models, each with its download, use, and remove. */
+.row-note {
+    margin: 0;
+    padding: 4px 0 12px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.row-note.error {
+    color: var(--err);
+}
+
+.models {
+    display: grid;
+}
+
+.row.model > span:first-child {
+    min-width: 0;
+    flex: 1;
+}
+
+.row.model em {
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--hair);
+    color: var(--muted);
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 500;
+    vertical-align: 1px;
+}
+
+.row.model em.in-use {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.model-progress {
+    display: grid;
+    gap: 4px;
+    margin-top: 6px;
+}
