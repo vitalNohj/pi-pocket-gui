@@ -65,6 +65,20 @@ export const DRAG_CSS = `:root::after {
     z-index: 2147483647;
 }`;
 
+/**
+ * Windows paints minimize/maximize hover as a faint tint of black or white picked by the app's native theme, not by
+ * symbolColor (Electron's win_caption_button.cc). With the system in light mode that is black on Pi Pocket's dark bar:
+ * invisible. The caption buttons need the native theme to match the page's mode; nothing else does on Windows.
+ */
+export function captionScheme(platform: string, style: TitleBarStyle, theme: ThemeColors): "dark" | "light" | undefined {
+    return platform === "win32" && style === "seamless" ? theme.mode : undefined;
+}
+
+/** `reg query ... /v AppsUseLightTheme` output: 0 is dark. Missing or unreadable is Windows' default, light. */
+export function parseAppsUseLightTheme(output: string): "dark" | "light" {
+    return /AppsUseLightTheme\s+REG_DWORD\s+0x0+\b/i.test(output) ? "dark" : "light";
+}
+
 /** Whether the page makes room for the controls itself: Pi Pocket's web/window-controls.js marks its root. */
 const OWN_ROOM = `document.documentElement.hasAttribute("data-window-controls")`;
 
@@ -74,6 +88,11 @@ export interface TitleBarHost {
     window: BaseWindow;
     /** The server's view: its page is told of the band, unless it makes room itself. */
     server: WebContents;
+    theme: ThemeColors;
+    /** Electron's nativeTheme (only its themeSource is set). */
+    nativeTheme?: { themeSource: "system" | "dark" | "light" };
+    /** The system's own light or dark for apps, unaffected by nativeTheme.themeSource. */
+    systemScheme?: () => Promise<"dark" | "light">;
 }
 
 export function setUpTitleBar(host: TitleBarHost): {
@@ -88,6 +107,17 @@ export function setUpTitleBar(host: TitleBarHost): {
     const contents = host.server;
     const band = bandHeight(host.platform);
     let failed = false;
+    let theme = host.theme;
+    /** The system's scheme, which the page keeps seeing while nativeTheme follows Pi Pocket's mode for the buttons. */
+    let system: "dark" | "light" | undefined;
+
+    const applyCaption = () => {
+        const scheme = captionScheme(host.platform, host.style, theme);
+
+        if (scheme !== undefined && host.nativeTheme !== undefined && host.nativeTheme.themeSource !== scheme) {
+            host.nativeTheme.themeSource = scheme;
+        }
+    };
     /** Whether the page now shown makes its own room. Kept across loads of the same origin: the next one likely does too. */
     let ownRoom = false;
     let origin = "";
@@ -106,6 +136,13 @@ export function setUpTitleBar(host: TitleBarHost): {
             }
 
             await contents.debugger.sendCommand("Emulation.setSafeAreaInsetsOverride", { insets: { top: inset() } });
+
+            // nativeTheme also sets prefers-color-scheme: give the page the system's own, so a theme's pair still follows it.
+            if (system !== undefined) {
+                await contents.debugger.sendCommand("Emulation.setEmulatedMedia", {
+                    features: [{ name: "prefers-color-scheme", value: system }],
+                });
+            }
         } catch (error) {
             if (!failed) {
                 failed = true;
@@ -167,13 +204,37 @@ export function setUpTitleBar(host: TitleBarHost): {
 
     host.window.on("enter-full-screen", () => void tell());
     host.window.on("leave-full-screen", () => void tell());
+
+    // The system's setting can change while the app runs: read it again when the window comes back to the front.
+    const readSystem = async () => {
+        if (captionScheme(host.platform, host.style, theme) === undefined || host.systemScheme === undefined) {
+            return;
+        }
+
+        const next = await host.systemScheme().catch(() => system ?? "light");
+
+        if (next !== system) {
+            system = next;
+            await tell();
+        }
+    };
+
+    host.window.on("focus", () => void readSystem());
+    void readSystem().then(applyCaption);
     void tell();
 
     return {
         offset: () => (failed && !ownRoom ? inset() : 0),
-        themeChanged: (theme) => {
+        themeChanged: (next) => {
+            theme = next;
+
             if (host.platform !== "darwin") {
-                host.window.setTitleBarOverlay(overlayColors(theme));
+                host.window.setTitleBarOverlay(overlayColors(next));
+            }
+
+            // Only once the page is told the system's scheme, or a theme pair would flip with the override.
+            if (system !== undefined) {
+                applyCaption();
             }
         },
     };

@@ -2,6 +2,7 @@
  * The main process. One window holds two views: the server's page (Pi Pocket itself) and the app's config screen. The
  * server's page stays loaded while the config screen shows, so going back is instant and nothing it was doing stops.
  */
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -12,6 +13,7 @@ import {
     globalShortcut,
     ipcMain,
     Menu,
+    nativeTheme,
     nativeImage,
     session,
     shell,
@@ -25,7 +27,7 @@ import { retryDelayMs } from "./backoff";
 import { mayConnect, NavigationResponses } from "./connection";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
 import { setUpAppearance } from "./appearance";
-import { setUpTitleBar, titleBarOptions } from "./titlebar";
+import { parseAppsUseLightTheme, setUpTitleBar, titleBarOptions } from "./titlebar";
 import { loadTheme, sameTheme, saveTheme } from "./theme";
 import { setUpDesktop } from "./desktop";
 import { setUpUpdates } from "./updates";
@@ -213,6 +215,17 @@ async function start(): Promise<void> {
         style: titleBarAtStart,
         window,
         server: server.webContents,
+        theme,
+        nativeTheme,
+        systemScheme: () =>
+            new Promise((resolve) => {
+                execFile(
+                    "reg",
+                    ["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "/v", "AppsUseLightTheme"],
+                    { windowsHide: true, timeout: 3000 },
+                    (_error, stdout) => resolve(parseAppsUseLightTheme(String(stdout))),
+                );
+            }),
     });
 
     gui.appearance = setUpAppearance({
