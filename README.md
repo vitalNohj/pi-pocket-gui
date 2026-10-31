@@ -14,6 +14,9 @@ A tray with your pinned sessions · a badge · native notifications · a seamles
 
 </div>
 
+> [!NOTE]
+> **Remote execution is still being worked on.** Pi works on the files and runs the commands of the computer the server is on. With a server on this computer, that is this computer. With a server elsewhere (a home server, a VPS), it is that machine, not this one: working on this computer's files from a remote server needs remote execution, which is not in the app yet.
+
 ## What it is
 
 The app opens the Pi Pocket you already run (on this computer, on a home server, or behind a tunnel) in a window of its own, and adds what a browser tab cannot do. It runs no server and no model itself: your sessions, keys, and history stay on the server.
