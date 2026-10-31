@@ -15,6 +15,12 @@ export type MacMaterial = "under-window" | "sidebar" | "hud" | "fullscreen-ui";
 /** The blur Windows 11 draws under a see-through window. */
 export type WindowsMaterial = "acrylic" | "mica";
 
+/**
+ * How the tray menu looks on Windows. "windows" follows the Windows app theme; "theme" follows Pi Pocket, like its
+ * session menu. Other desktops keep their native menu and ignore this.
+ */
+export type TrayMenuStyle = "windows" | "theme";
+
 /** Whether this desktop can make the window see-through now, and what it blurs with. */
 export type TranslucencySupport =
     | { kind: "live"; blur: "system" | "compositor" }
@@ -97,6 +103,11 @@ export interface Settings {
         opacity: number;
         macMaterial: MacMaterial;
         windowsMaterial: WindowsMaterial;
+        /**
+         * The tray menu on Windows: the Windows look, or Pi Pocket's theme. macOS and Linux keep their native menu and
+         * ignore this.
+         */
+        trayMenu: TrayMenuStyle;
     };
 }
 

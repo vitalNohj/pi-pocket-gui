@@ -37,7 +37,7 @@ export function defaultSettings(): Settings {
         },
         updates: { check: true, intervalHours: 6 },
         local: { folder: "", port: 8787, access: "local", data: "", keepUpdated: true },
-        appearance: { translucent: false, opacity: 82, macMaterial: "under-window", windowsMaterial: "acrylic" },
+        appearance: { translucent: false, opacity: 82, macMaterial: "under-window", windowsMaterial: "acrylic", trayMenu: "windows" },
     };
 }
 
@@ -160,6 +160,7 @@ const schema: { [S in keyof Settings]: { [K in keyof Settings[S]]: Check<Setting
         opacity: int(0, 100),
         macMaterial: oneOf("under-window", "sidebar", "hud", "fullscreen-ui"),
         windowsMaterial: oneOf("acrylic", "mica"),
+        trayMenu: oneOf("windows", "theme"),
     },
 };
 

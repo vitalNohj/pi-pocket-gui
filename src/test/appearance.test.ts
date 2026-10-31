@@ -34,5 +34,9 @@ test("appearance is off by default, and its values are checked", () => {
     assert.equal(settings.appearance.opacity, 82);
     assert.equal(settings.appearance.macMaterial, "hud");
     assert.equal(settings.appearance.windowsMaterial, "acrylic");
+    assert.equal(settings.appearance.trayMenu, "windows");
     assert.deepEqual(problems.map((problem) => problem.path).sort(), ["appearance.opacity", "appearance.windowsMaterial"]);
+
+    assert.equal(validateSettings({ appearance: { trayMenu: "theme" } }).settings.appearance.trayMenu, "theme");
+    assert.equal(validateSettings({ appearance: { trayMenu: "fancy" } }).settings.appearance.trayMenu, "windows");
 });
