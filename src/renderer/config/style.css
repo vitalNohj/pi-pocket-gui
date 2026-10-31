@@ -617,3 +617,104 @@ input[type="range"] {
     app-region: drag;
     z-index: 10;
 }
+
+/* Where Pi Pocket runs: two big choices above the cards. */
+.where {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.where label {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 12px 14px;
+    border: 1px solid var(--hair);
+    border-radius: var(--radius);
+    background: var(--ground, var(--bg));
+    cursor: pointer;
+}
+
+.where label:has(input:checked) {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.where input {
+    margin-top: 3px;
+    accent-color: var(--accent);
+}
+
+.where span {
+    display: grid;
+    gap: 2px;
+}
+
+.where small {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.local-rows {
+    padding: 0;
+}
+
+.path-field {
+    display: flex !important;
+    gap: 8px;
+}
+
+.path-field input {
+    flex: 1;
+    min-width: 0;
+}
+
+.progress {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--hair);
+    overflow: hidden;
+}
+
+.progress > div {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.2s;
+}
+
+.progress.indeterminate > div {
+    width: 30% !important;
+    animation: slide 1.2s ease-in-out infinite;
+}
+
+@keyframes slide {
+    from {
+        transform: translateX(-100%);
+    }
+
+    to {
+        transform: translateX(340%);
+    }
+}
+
+details.log summary {
+    padding-inline: 0;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+details.log pre {
+    max-height: 220px;
+    overflow: auto;
+    margin: 6px 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--code-bg);
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}

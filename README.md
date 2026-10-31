@@ -4,9 +4,9 @@
 
 # Pi Pocket for desktop
 
-**Your [Pi Pocket](https://github.com/TannerMidd/pi-pocket) server, as a real app on macOS, Windows, and Linux.**
+**[Pi Pocket](https://github.com/TannerMidd/pi-pocket) as a real app on macOS, Windows, and Linux: on this computer, or your server's.**
 
-A tray with your pinned sessions · a badge · native notifications · a seamless window · a see-through background
+Pi Pocket installed and kept current for you · a tray with your pinned sessions · a badge · native notifications · a seamless window · a see-through background
 
 [Download](https://github.com/vitalNohj/pi-pocket-gui/releases/latest) · [Install](#install) · [Settings](#settings) · [Roadmap](#roadmap)
 
@@ -15,14 +15,15 @@ A tray with your pinned sessions · a badge · native notifications · a seamles
 </div>
 
 > [!NOTE]
-> **Remote execution is still being worked on.** Pi works on the files and runs the commands of the computer the server is on. With a server on this computer, that is this computer. With a server elsewhere (a home server, a VPS), it is that machine, not this one: working on this computer's files from a remote server needs remote execution, which is not in the app yet.
+> **Remote execution is still being worked on.** Pi works on the files and runs the commands of the computer the server is on. With Pi Pocket on this computer, that is this computer. With a server elsewhere (a home server, a VPS), it is that machine, not this one: working on this computer's files from a remote server needs remote execution, which is not in the app yet.
 
 ## What it is
 
-The app opens the Pi Pocket you already run (on this computer, on a home server, or behind a tunnel) in a window of its own, and adds what a browser tab cannot do. It runs no server and no model itself: your sessions, keys, and history stay on the server.
+The app runs Pi Pocket on this computer for you, or opens one you already run elsewhere (a home server, a VPS, behind a tunnel), in a window of its own, and adds what a browser tab cannot do.
 
 |  |  |
 |---|---|
+| **Pi Pocket on this computer** | No terminal: the app downloads Pi Pocket and the Node.js it needs, runs it while the app runs, and keeps both up to date. |
 | **Tray** | Your pinned sessions with their state (◆ waiting for you, ◐ working, ✕ failed), one click away. |
 | **Badge** | How many sessions need you, on the dock or taskbar icon. |
 | **Notifications** | Native ones, even with the window hidden. An approval can be answered from the notification. |
@@ -35,13 +36,7 @@ The app opens the Pi Pocket you already run (on this computer, on a home server,
 
 ## Install
 
-You need a Pi Pocket server first. On any computer with Node.js 22.19 or newer:
-
-```bash
-npm install -g pi-pocket && pi-pocket
-```
-
-Then download the app for your computer from [**Releases**](https://github.com/vitalNohj/pi-pocket-gui/releases/latest):
+Download the app for your computer from [**Releases**](https://github.com/vitalNohj/pi-pocket-gui/releases/latest):
 
 | | File | |
 |---|---|---|
@@ -49,11 +44,26 @@ Then download the app for your computer from [**Releases**](https://github.com/v
 | **Windows** | `…-win-x64.exe` | SmartScreen warns about an unsigned app: **More info** → **Run anyway**. |
 | **Linux** | `…-linux-x86_64.AppImage` or `…-linux-amd64.deb` | Make the AppImage executable and run it, or install the .deb. |
 
-Open the app, give it your server's address (`http://127.0.0.1:8787` by default), and sign in inside Pi Pocket with your login link or an invite.
+Open the app and pick where Pi Pocket runs:
+
+- **This computer:** click **Install Pi Pocket**. Nothing else to install, not even Node.js. See [Pi Pocket on this computer](#pi-pocket-on-this-computer).
+- **Another server:** give its address and sign in inside Pi Pocket with your login link or an invite. To set one up, run `npm install -g pi-pocket && pi-pocket` on it (Node.js 22.19 or newer).
 
 > Version 0.1.0 was named `pi-pocket-gui.app` on macOS. After installing a newer one, move the old one to the Trash.
 
 ## A closer look
+
+### Pi Pocket on this computer
+
+Pick **This computer** in Settings and click **Install Pi Pocket**. The app downloads the newest Pi Pocket from npm and a Node.js for it from nodejs.org (about 60 MB, 400 MB on disk; checked against nodejs.org's checksums and npm's), starts it, and opens it, signed in as its owner.
+
+- **It runs while the app runs,** also with the window closed to the tray. Quitting the app stops it; running sessions pick up at the next start. With **Launch at login** and **Start hidden**, this computer is an always-on Pi Pocket for your phone.
+- **Who can connect:** this computer only, the local network, your Tailscale network, or anywhere through a Cloudflare link. Also the folder new sessions start in, the port, and the data folder (`~/.pi-pocket` by default, the same as Pi Pocket in a terminal).
+- **Kept up to date:** the app looks for a newer Pi Pocket and Node.js at start and every few hours, and installs them beside the ones in use. They take over when Pi Pocket restarts: **Restart** in Settings, the tray's **Restart Pi Pocket to update**, or the next start of the app. If a new version does not start, the one before runs again. Pi Pocket's own Settings → Updates works too.
+- **Pi Pocket already running** on that port (started in a terminal) is found and offered instead.
+- **It sees your tools:** Pi Pocket gets the same environment as your terminal (your shell's `PATH`), so the agent finds `git`, `node`, and the rest.
+
+Everything lives in the app's data folder (below), in `server/`: the runtimes and `server.log`. How it works: [docs/local-server.md](docs/local-server.md).
 
 ### A window without a title bar
 

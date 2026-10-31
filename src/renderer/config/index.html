@@ -26,9 +26,66 @@
 
             <div class="columns">
                 <div class="column">
-                    <section class="card connection" aria-labelledby="connection-title">
+                    <div class="where" role="radiogroup" aria-label="Where Pi Pocket runs">
+                        <label><input type="radio" name="where" value="local" /><span><strong>This computer</strong><small>The app runs Pi Pocket here.</small></span></label>
+                        <label><input type="radio" name="where" value="remote" /><span><strong>Another server</strong><small>Open a Pi Pocket that runs elsewhere.</small></span></label>
+                    </div>
+
+                    <section class="card connection" id="local-card" aria-labelledby="local-title" hidden>
                         <div class="card-head">
-                            <h2 id="connection-title">Connection</h2>
+                            <h2 id="local-title">Pi Pocket on this computer</h2>
+                            <span id="local-status" class="pill" data-state="checking">…</span>
+                        </div>
+                        <p id="local-detail" class="muted small"></p>
+                        <div id="local-progress" class="progress" hidden><div></div></div>
+                        <div class="actions">
+                            <button type="button" class="primary" data-local="install" hidden>Install Pi Pocket</button>
+                            <button type="button" class="primary" data-local="start" hidden>Start</button>
+                            <button type="button" class="primary" data-local="open" hidden>Open it</button>
+                            <button type="button" class="secondary" data-local="restart" hidden>Restart</button>
+                            <button type="button" class="ghost" data-local="stop" hidden>Stop</button>
+                            <button type="button" class="ghost" id="local-show" hidden>Show Pi Pocket</button>
+                        </div>
+                        <div class="rows local-rows">
+                            <div class="row" id="local-restart-row" hidden>
+                                <span><strong>Restart to apply</strong><small>Pi Pocket takes these settings when it starts. Running work continues after.</small></span>
+                                <button type="button" class="secondary" data-local="restart">Restart Pi Pocket</button>
+                            </div>
+                            <div class="row stack">
+                                <span><strong>Folder for new sessions</strong><small>Where a new session starts. Each session can pick another.</small></span>
+                                <span class="path-field"><input type="text" data-key="local.folder" id="local-folder" spellcheck="false" /><button type="button" class="secondary" data-choose="local-folder">Choose…</button></span>
+                            </div>
+                            <label class="row"><span><strong>Who can connect</strong><small id="access-note"></small></span>
+                                <select data-key="local.access" id="local-access">
+                                    <option value="local">This computer only</option>
+                                    <option value="lan">Devices on the local network</option>
+                                    <option value="tailscale">Devices on my Tailscale network</option>
+                                    <option value="cloudflare">Anywhere, through a Cloudflare link</option>
+                                </select>
+                            </label>
+                            <label class="row"><span><strong>Port</strong></span><input type="number" data-key="local.port" class="short" min="1024" max="65535" /></label>
+                            <div class="row stack">
+                                <span><strong>Data folder</strong><small>Sessions, people, and Pi Pocket's settings. The same as Pi Pocket in a terminal uses, unless changed.</small></span>
+                                <span class="path-field"><input type="text" data-key="local.data" id="local-data" spellcheck="false" /><button type="button" class="secondary" data-choose="local-data">Choose…</button></span>
+                            </div>
+                            <label class="row"><span><strong>Keep Pi Pocket up to date</strong><small>The app installs newer versions of Pi Pocket and Node.js for it; they take over when Pi Pocket restarts. Pi Pocket's own Settings → Updates works too.</small></span><input type="checkbox" data-key="local.keepUpdated" /></label>
+                            <div class="row">
+                                <span><strong id="local-update-status">Not checked yet</strong><small id="local-update-detail"></small></span>
+                                <span class="buttons">
+                                    <button type="button" class="secondary" data-local="check-updates" id="local-update-check">Check now</button>
+                                </span>
+                            </div>
+                        </div>
+                        <details class="log" id="local-log-box">
+                            <summary><span>What Pi Pocket printed</span></summary>
+                            <pre id="local-log"></pre>
+                            <button type="button" class="ghost small" data-local="show-log">Show log file</button>
+                        </details>
+                    </section>
+
+                    <section class="card connection" id="remote-card" aria-labelledby="connection-title">
+                        <div class="card-head">
+                            <h2 id="connection-title">Server</h2>
                             <span id="status" class="pill" data-state="checking">Checking…</span>
                         </div>
                         <p id="status-detail" class="muted small"></p>
@@ -84,11 +141,11 @@
                         <p id="settings-shortcut" class="muted small"></p>
                     </section>
 
-                    <section class="card get" aria-labelledby="get-title">
-                        <h2 id="get-title">Or get the server yourself</h2>
+                    <section class="card get" id="get-card" aria-labelledby="get-title">
+                        <h2 id="get-title">Run a server somewhere else</h2>
                         <p>
-                            This app connects to a Pi Pocket server that already runs. Install one on this computer or on
-                            another one, start it, then put its address above.
+                            Install Pi Pocket on the computer that should do the work, start it, then put its address
+                            above. Or pick <strong>This computer</strong> above, and the app runs it here.
                         </p>
                         <ol class="steps">
                             <li>
@@ -99,8 +156,8 @@
                                 </div>
                             </li>
                             <li>
-                                <span>Choose <strong>This device only</strong> in its menu, then use the address it shows
-                                    (<code>http://127.0.0.1:8787</code> by default).</span>
+                                <span>Choose who can connect in its menu (<strong>Tailscale</strong> or the
+                                    <strong>local network</strong> for another computer), then use the address it shows.</span>
                             </li>
                             <li>
                                 <span>Open its login link once in this app to sign in.</span>
@@ -187,7 +244,7 @@
                     </details>
 
                     <details class="card">
-                        <summary><h2>Connection</h2></summary>
+                        <summary><h2>Connection to another server</h2></summary>
                         <div class="rows">
                             <label class="row"><span><strong>Open the server at start</strong><small>When it answers. Otherwise this screen shows first.</small></span><input type="checkbox" data-key="connection.autoConnect" /></label>
                             <label class="row"><span><strong>Check timeout</strong><small>Milliseconds.</small></span><input type="number" data-key="connection.probeTimeoutMs" class="short" min="500" max="60000" /></label>
@@ -201,7 +258,7 @@
                     <details class="card">
                         <summary><h2>Updates</h2></summary>
                         <div class="rows">
-                            <label class="row"><span><strong>Look for new versions of this app</strong><small>Pi Pocket itself updates on its server.</small></span><input type="checkbox" data-key="updates.check" /></label>
+                            <label class="row"><span><strong>Look for new versions of this app</strong><small>Pi Pocket itself updates on its server; on this computer, see its card.</small></span><input type="checkbox" data-key="updates.check" /></label>
                             <label class="row"><span><strong>How often</strong><small>Hours.</small></span><input type="number" data-key="updates.intervalHours" class="short" min="1" max="720" /></label>
                             <div class="row">
                                 <span><strong id="update-status">Not checked yet</strong><small id="update-detail"></small></span>

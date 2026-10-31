@@ -1,5 +1,5 @@
 /** The config screen: the connection on top, how to get a server below it, then the settings. */
-import type { ConfigReason, ConfigState, GuiConfigApi, ProbeResult, Settings } from "../../shared/types";
+import type { ConfigReason, ConfigState, GuiConfigApi, LocalAction, LocalState, ProbeResult, Settings } from "../../shared/types";
 
 declare global {
     interface Window {
@@ -250,6 +250,8 @@ function reasonBanner(reason: ConfigReason): { text: string; tone: "error" | "in
             return { text: `${reason.message} Retry opens Pi Pocket again.`, tone: "error" };
         case "first-run":
             return { text: "Welcome. Check the server's address, then connect.", tone: "info" };
+        case "local":
+            return undefined;
         default:
             return undefined;
     }
@@ -326,6 +328,153 @@ function renderTheme(next: ConfigState): void {
     root.dataset.ready = "";
 }
 
+// ——— This computer's Pi Pocket ———
+
+const ACCESS_NOTES: Record<string, string> = {
+    local: "Only this computer. Share sessions with a phone through Tailscale or a Cloudflare link instead.",
+    lan: "Phones and computers on the same Wi-Fi. Anyone on it can reach the sign-in page.",
+    tailscale: "Your devices on Tailscale, wherever they are. Needs Tailscale running on this computer.",
+    cloudflare: "A public https link through Cloudflare, for a phone anywhere. Pi Pocket downloads cloudflared once.",
+};
+
+const LOCAL_LABELS: Record<LocalState["status"], { pill: string; state: string }> = {
+    absent: { pill: "Not installed", state: "other" },
+    installing: { pill: "Installing…", state: "checking" },
+    stopped: { pill: "Stopped", state: "other" },
+    starting: { pill: "Starting…", state: "checking" },
+    running: { pill: "Running", state: "connected" },
+    external: { pill: "Already running", state: "detected" },
+    stopping: { pill: "Stopping…", state: "checking" },
+    failed: { pill: "Stopped", state: "not-detected" },
+};
+
+function renderLocal(next: ConfigState): void {
+    const local = next.local;
+    const isLocal = next.settings.server.mode === "local";
+
+    for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="where"]')) {
+        radio.checked = radio.value === next.settings.server.mode;
+    }
+
+    element("local-card").hidden = !isLocal;
+    element("remote-card").hidden = isLocal;
+    element("get-card").hidden = isLocal;
+
+    const label = LOCAL_LABELS[local.status];
+    const pill = element("local-status");
+
+    pill.textContent = label.pill;
+    pill.dataset.state = label.state;
+
+    const versions = local.installed === undefined ? "" : `Pi Pocket ${local.installed.pocket}, Node.js ${local.installed.node}.`;
+    const detail: Record<LocalState["status"], string> = {
+        absent: "Pi Pocket runs on this computer while the app runs, also hidden in the tray. Install downloads it and the Node.js it needs (about 60 MB, 400 MB on disk), from npm and nodejs.org.",
+        installing: local.message ?? "Installing…",
+        stopped: `${versions} It starts with the app.`,
+        starting: `${versions} Starting…`,
+        running: `${versions} Open at ${local.url ?? ""}. It stops when you quit the app; running sessions pick up at the next start.`,
+        external: `${local.message ?? "Pi Pocket already runs at this port."} Open it, or stop it and start this computer's own.`,
+        stopping: "Stopping…",
+        failed: local.message ?? "Pi Pocket stopped.",
+    };
+
+    element("local-detail").textContent = detail[local.status];
+
+    const bar = element("local-progress");
+    const percent = local.progress?.percent;
+
+    bar.hidden = local.status !== "installing";
+    (bar.firstElementChild as HTMLElement).style.width = percent === undefined ? "100%" : `${String(percent)}%`;
+    bar.classList.toggle("indeterminate", percent === undefined);
+
+    const show = (action: string, visible: boolean) => {
+        for (const button of document.querySelectorAll<HTMLButtonElement>(`.actions [data-local="${action}"]`)) {
+            button.hidden = !visible;
+        }
+    };
+    const installed = local.installed !== undefined;
+
+    show("install", local.status === "absent" || (local.status === "failed" && !installed));
+    show("start", installed && (local.status === "stopped" || local.status === "failed"));
+    show("open", local.status === "external");
+    show("restart", local.status === "running");
+    show("stop", local.status === "running" || local.status === "starting");
+    element("local-show").hidden = !(local.status === "running" && next.connectedUrl !== undefined);
+    element("local-restart-row").hidden = !local.restartNeeded;
+
+    element<HTMLInputElement>("local-folder").placeholder = local.defaults.folder;
+    element<HTMLInputElement>("local-data").placeholder = local.defaults.data;
+    element("access-note").textContent = ACCESS_NOTES[next.settings.local.access] ?? "";
+
+    const update = local.update;
+    const updateStatus: Record<typeof update.status, string> = {
+        idle: "Not checked yet",
+        checking: "Checking…",
+        current: "Up to date",
+        building: `Installing Pi Pocket ${update.pocket ?? ""}${update.percent === undefined ? "" : ` (${String(update.percent)}%)`}…`,
+        ready: `Pi Pocket ${update.pocket ?? ""} is ready`,
+        error: "The update failed",
+    };
+
+    element("local-update-status").textContent = updateStatus[update.status];
+    element("local-update-detail").textContent =
+        update.status === "error"
+            ? update.message ?? ""
+            : update.status === "ready"
+              ? "It takes over when Pi Pocket restarts: Restart above, the tray, or the next start of the app."
+              : update.checkedAt === undefined
+                ? ""
+                : `Checked ${new Date(update.checkedAt).toLocaleString()}.`;
+    element<HTMLButtonElement>("local-update-check").disabled =
+        !installed || update.status === "checking" || update.status === "building" || local.status === "installing";
+
+    const log = element("local-log");
+    const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+
+    log.textContent = local.log.join("\n");
+
+    if (atBottom) {
+        log.scrollTop = log.scrollHeight;
+    }
+
+    element("local-log-box").hidden = local.log.length === 0;
+
+    if (local.status === "failed") {
+        (element("local-log-box") as HTMLDetailsElement).open = true;
+    }
+}
+
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-local]")) {
+    button.addEventListener("click", () => {
+        void gui.local(button.dataset.local as LocalAction);
+    });
+}
+
+element("local-show").addEventListener("click", () => {
+    void gui.back();
+});
+
+for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="where"]')) {
+    radio.addEventListener("change", () => {
+        if (radio.checked) {
+            void gui.local(radio.value === "local" ? "use-local" : "use-remote");
+        }
+    });
+}
+
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-choose]")) {
+    button.addEventListener("click", () => {
+        const input = element<HTMLInputElement>(button.dataset.choose ?? "");
+
+        void gui.chooseFolder(input.value || input.placeholder).then((folder) => {
+            if (folder !== undefined) {
+                input.value = folder;
+                scheduleSave();
+            }
+        });
+    });
+}
+
 function render(next: ConfigState): void {
     state = next;
     renderTheme(next);
@@ -333,6 +482,7 @@ function render(next: ConfigState): void {
     element("recovery").hidden = !next.recovery;
     element("settings-page").hidden = next.recovery;
     element("settings-shortcut").textContent = `Return to Server settings any time with ${next.platform === "darwin" ? "⌘," : "Ctrl+,"}, the tray menu, or a right-click on the page.`;
+    renderLocal(next);
     element("app-version").textContent = next.appVersion;
     renderUpdate(next);
     element("config-path").textContent = next.configPath;

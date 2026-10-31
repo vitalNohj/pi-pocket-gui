@@ -13,6 +13,7 @@ import {
     ipcMain,
     Menu,
     nativeImage,
+    net,
     session,
     shell,
     Tray,
@@ -20,7 +21,7 @@ import {
     type IpcMainInvokeEvent,
     type MenuItemConstructorOptions,
 } from "electron";
-import type { ConfigReason, ConfigState, ProbeResult, Settings, SettingsProblem, ThemeColors, TitleBarStyle } from "../shared/types";
+import type { ConfigReason, ConfigState, LocalAction, ProbeResult, Settings, SettingsProblem, ThemeColors, TitleBarStyle } from "../shared/types";
 import { retryDelayMs } from "./backoff";
 import { mayConnect, NavigationResponses } from "./connection";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
@@ -28,6 +29,7 @@ import { setUpAppearance } from "./appearance";
 import { setUpTitleBar, titleBarOptions } from "./titlebar";
 import { loadTheme, sameTheme, saveTheme } from "./theme";
 import { setUpDesktop } from "./desktop";
+import { setUpLocalServer } from "./local-server";
 import { setUpUpdates } from "./updates";
 import { setLaunchAtLogin, startedAtLogin, trayAvailable } from "./platform";
 import { networkMessage, probe } from "./probe";
@@ -103,6 +105,10 @@ interface Gui {
     themePath: string;
     /** The notice about a server without the bridge was shown in this run. */
     toldNoBridge: boolean;
+    /** Pi Pocket on this computer (src/main/local-server.ts). */
+    local: ReturnType<typeof setUpLocalServer> | undefined;
+    /** The login link was opened: the next page drops it from the view's history. */
+    signingIn: boolean;
 }
 
 let gui: Gui | undefined;
@@ -206,6 +212,8 @@ async function start(): Promise<void> {
         theme,
         themePath,
         toldNoBridge: false,
+        local: undefined,
+        signingIn: false,
     };
 
     gui.titleBar = setUpTitleBar({
@@ -241,6 +249,22 @@ async function start(): Promise<void> {
         },
     });
 
+    gui.local = setUpLocalServer({
+        home: join(app.getPath("userData"), "server"),
+        platform: process.platform,
+        arch: process.arch,
+        settings: () => gui!.settings,
+        fetch: (url) => net.fetch(url, { headers: { "user-agent": `pi-pocket-gui/${app.getVersion()}` } }),
+        probe: (url) =>
+            probe(url, (target, init) => serverSession.fetch(target, init), gui!.settings.connection.probeTimeoutMs),
+        changed: () => {
+            pushConfigState();
+            gui?.desktop?.refreshTray();
+        },
+        ready: (url, loginPath) => openLocal(url, loginPath),
+        down: () => localDown(),
+    });
+
     gui.desktop = setUpDesktop({
         assets: ASSETS,
         window: () => window,
@@ -265,7 +289,7 @@ async function start(): Promise<void> {
         toggleWindow,
         openSettings,
         quit,
-        updateItem: () => gui?.updates?.trayItem(),
+        updateItem: () => gui?.updates?.trayItem() ?? gui?.local?.trayItem(),
         theme: () => gui!.theme,
         themeChanged: (next) => {
             const state = gui!;
@@ -334,14 +358,28 @@ async function start(): Promise<void> {
     app.on("second-instance", () => {
         showWindow();
     });
-    app.on("before-quit", () => {
+    let stopped = false;
+
+    app.on("before-quit", (event) => {
         if (gui !== undefined) {
             gui.quitting = true;
+        }
+
+        // This computer's Pi Pocket stops with the app: its sessions resume at the next start.
+        if (!stopped && gui?.local !== undefined) {
+            event.preventDefault();
+            stopped = true;
+            void gui.local.quit().finally(() => app.quit());
         }
     });
     app.on("activate", () => {
         showWindow();
     });
+
+    // A system shutdown or `kill`: quit the usual way, so this computer's Pi Pocket stops with the app.
+    for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
+        process.on(signal, quit);
+    }
     app.on("will-quit", () => {
         globalShortcut.unregisterAll();
     });
@@ -359,6 +397,14 @@ async function start(): Promise<void> {
 
     if (!hidden) {
         window.show();
+    }
+
+    // This computer's Pi Pocket: the window opens it once it is ready, and shows its state until then.
+    if (gui.settings.server.mode === "local") {
+        showConfig({ kind: "local" });
+        void gui.local!.boot();
+
+        return;
     }
 
     // First run: always show the config screen, with what the check found, so the person confirms the address.
@@ -384,10 +430,132 @@ async function start(): Promise<void> {
     }
 }
 
+/** The address the window opens: this computer's Pi Pocket, or the server set in settings. */
+function serverUrl(): string {
+    const settings = gui?.settings;
+
+    if (settings?.server.mode === "local") {
+        return gui?.local?.url() ?? `http://127.0.0.1:${String(settings.local.port)}`;
+    }
+
+    return settings?.server.url ?? "";
+}
+
 function currentOrigin(): string {
-    const normalized = normalizeServerUrl(gui?.settings.server.url ?? "");
+    const normalized = normalizeServerUrl(serverUrl());
 
     return normalized.ok ? normalized.origin : "null";
+}
+
+/** This computer's Pi Pocket is ready: sign in with its login link (the cookie keeps the app signed in), and show it. */
+function openLocal(url: string, loginPath: string): void {
+    const state = gui!;
+
+    if (state.settings.server.mode !== "local") {
+        return;
+    }
+
+    stopRetry();
+    state.reason = { kind: "user" };
+    state.loadedUrl = url;
+    state.unverified = false;
+    state.signingIn = true;
+    void checkAddress(url);
+    void state.server.webContents.loadURL(`${url}${loginPath}`).catch(() => {
+        // did-fail-load shows the error.
+    });
+    show("server");
+}
+
+/** This computer's Pi Pocket stopped, failed, or is not installed: show its state. */
+function localDown(): void {
+    const state = gui!;
+
+    if (state.settings.server.mode !== "local") {
+        return;
+    }
+
+    stopHealth();
+    stopRetry();
+
+    if (state.loadedUrl !== undefined) {
+        state.loadedUrl = undefined;
+        void state.server.webContents.loadURL("about:blank").catch(() => {});
+    }
+
+    showConfig({ kind: "local" });
+}
+
+/** Switches between this computer's Pi Pocket and another server. */
+async function useMode(mode: "local" | "remote"): Promise<void> {
+    const state = gui!;
+
+    if (state.settings.server.mode === mode) {
+        return;
+    }
+
+    state.settings = { ...state.settings, server: { ...state.settings.server, mode } };
+    saveSettings(state.configPath, state.settings);
+    stopHealth();
+    stopRetry();
+    state.loadedUrl = undefined;
+    state.probe = undefined;
+    void state.server.webContents.loadURL("about:blank").catch(() => {});
+
+    if (mode === "local") {
+        showConfig({ kind: "local" });
+        await state.local!.boot();
+
+        return;
+    }
+
+    await state.local!.stop();
+    showConfig({ kind: "user" });
+
+    if ((await checkAddress(state.settings.server.url)).kind !== "detected") {
+        scheduleRetry();
+    }
+}
+
+async function localAction(action: LocalAction): Promise<void> {
+    const state = gui!;
+    const local = state.local!;
+
+    switch (action) {
+        case "install":
+            await local.install();
+            break;
+        case "start":
+            await local.start();
+            break;
+        case "stop":
+            await local.stop();
+            break;
+        case "restart":
+            await local.restart();
+            break;
+        case "check-updates":
+            await local.checkUpdates();
+            break;
+        case "show-log":
+            shell.showItemInFolder(local.logFile);
+            break;
+        case "open": {
+            // A Pi Pocket started outside the app answers at the port: open it as another server.
+            const url = local.state().url ?? `http://127.0.0.1:${String(state.settings.local.port)}`;
+
+            state.settings = { ...state.settings, server: { ...state.settings.server, url } };
+            await useMode("remote");
+            connect(url);
+            break;
+        }
+        case "use-local":
+            await useMode("local");
+            break;
+        case "use-remote":
+            await useMode("remote");
+            break;
+    }
 }
 
 function layout(): void {
@@ -473,6 +641,7 @@ function configState(): ConfigState {
         platform: process.platform,
         appVersion: app.getVersion(),
         update: state.updates?.state() ?? { method: "source", status: "idle" },
+        local: state.local!.state(),
     };
 }
 
@@ -513,7 +682,7 @@ async function checkAddress(url: string): Promise<ProbeResult> {
         state.settings.connection.probeTimeoutMs,
     );
 
-    if (sameAddress(url, state.settings.server.url)) {
+    if (sameAddress(url, serverUrl())) {
         state.probe = result;
 
         if (result.kind === "detected" && state.unverified) {
@@ -652,11 +821,17 @@ function watchServerView(): void {
             gui.unverified = false;
             stopHealth();
             stopRetry();
-            showConfig({ kind: "load-failed", url: gui.settings.server.url, message });
+            showConfig({ kind: "load-failed", url: serverUrl(), message });
         }
     });
 
     contents.on("did-finish-load", () => {
+        // The login link is spent: Back must not go to it.
+        if (gui?.signingIn === true && !contents.getURL().includes("/login")) {
+            gui.signingIn = false;
+            contents.navigationHistory.clear();
+        }
+
         tellNoBridge();
 
         // After a sign-in redirects back, detection can succeed and remove the recovery footer.
@@ -751,6 +926,11 @@ function scheduleRetry(): void {
     const state = gui!;
 
     stopRetry();
+
+    // This computer's Pi Pocket: its process says when it is up, nothing to poll.
+    if (state.settings.server.mode === "local") {
+        return;
+    }
     state.retryAttempt += 1;
 
     const delay = retryDelayMs(state.retryAttempt, state.settings.connection.retryMaxSeconds);
@@ -815,7 +995,7 @@ function startHealth(): void {
 
     stopHealth();
 
-    if (seconds === 0) {
+    if (seconds === 0 || state.settings.server.mode === "local") {
         return;
     }
 
@@ -1044,6 +1224,7 @@ function registerIpc(): void {
         saveSettings(state.configPath, state.settings);
         applyDesktopSettings(before);
         state.updates?.reschedule();
+        state.local?.rescheduleUpdates();
 
         if (!sameAddress(before.server.url, state.settings.server.url)) {
             state.probe = undefined;
@@ -1100,6 +1281,17 @@ function registerIpc(): void {
 
         const state = gui!;
 
+        if (state.settings.server.mode === "local") {
+            if (state.loadedUrl !== undefined) {
+                state.server.webContents.reload();
+                show("server");
+            } else {
+                await state.local!.start();
+            }
+
+            return;
+        }
+
         state.retryAttempt = 0;
 
         const found = await checkAddress(state.settings.server.url);
@@ -1124,6 +1316,25 @@ function registerIpc(): void {
     handle("config:check-updates", () => gui!.updates?.check(true));
 
     handle("config:update-action", () => gui!.updates?.act());
+
+    handle("config:local", (_event, action) => {
+        const actions: LocalAction[] = ["install", "start", "stop", "restart", "open", "check-updates", "show-log", "use-local", "use-remote"];
+
+        if (typeof action !== "string" || !(actions as string[]).includes(action)) {
+            throw new Error("Not an action");
+        }
+
+        return localAction(action as LocalAction);
+    });
+
+    handle("config:choose-folder", async (_event, start) => {
+        const result = await dialog.showOpenDialog(gui!.window, {
+            properties: ["openDirectory", "createDirectory"],
+            ...(typeof start === "string" && start !== "" ? { defaultPath: start } : {}),
+        });
+
+        return result.canceled ? undefined : result.filePaths[0];
+    });
 
     handle("config:relaunch", () => {
         gui!.quitting = true;

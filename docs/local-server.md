@@ -17,11 +17,14 @@ Settings → Connection offers two choices:
 - **This computer:** "Pi Pocket runs on this computer while the app runs." The first time, Install downloads it (about
   60 MB, about 400 MB on disk), then it starts and the app opens it, signed in as its owner. Settings: the folder new
   sessions start in, the port, who can connect (this computer only, the local network, Tailscale, or a Cloudflare
-  tunnel), and the data folder.
+  tunnel), and the data folder. A change takes a restart of Pi Pocket, which the card offers.
 - **Another server:** the address of a Pi Pocket that runs elsewhere, as before.
 
-A Pi Pocket that already answers at the chosen port (one started from a terminal) is offered instead: "Pi Pocket
-already runs here. Open it", which switches to Another server with its address.
+A Pi Pocket that already answers at the chosen port (one started from a terminal) is offered instead: **Open it**
+switches to Another server with its address.
+
+Settings that existed before this choice keep opening their server (Another server); a new install starts on This
+computer.
 
 While the app runs, so does Pi Pocket: closing the window keeps both in the tray. Quitting the app stops Pi Pocket;
 Pi Durable picks running sessions up at the next start. Launch at login, with Start hidden, makes this computer's Pi
@@ -32,22 +35,27 @@ Pocket an always-on server for a phone.
 ### What is downloaded, and where
 
 ```
-<runtime folder>/                  macOS, Linux: <userData>/server   Windows: %LOCALAPPDATA%\Pi Pocket\server
-  current.json                     the runtime in use, and the one before it (for a rollback)
+<app data>/server/
+  current.json                     the runtime in use; the one before an update, until the new one starts; one built
+                                   by an update, waiting for the next start
   runtimes/<id>/                   one Node.js, with Pi Pocket installed globally in it
-    bin/node, lib/node_modules/pi-pocket, lib/node_modules/npm/npmrc  (Windows: node.exe, node_modules\…)
-  server.log                       what Pi Pocket printed, the last 2 MB
+    bin/node, lib/node_modules/pi-pocket  (Windows: node.exe, node_modules\pi-pocket)
+  downloads/                       the Node.js archives in use
+  launcher.pid                     the launcher the app started, to stop one left by a crash of the app
+  server.log                       what Pi Pocket printed (login tokens hidden), up to 2 MB
 ```
 
 - **Node.js:** the newest LTS release from nodejs.org that Pi Pocket's `engines` allows, as `.tar.gz` (macOS, Linux)
   or `.zip` (Windows), checked against nodejs.org's `SHASUMS256.txt`, unpacked with the system's `tar` (Windows 10 and
   later have one). Not Electron's Node: it has no npm, and Pi Pocket's own updater needs one beside the Node that runs
   it.
-- **Pi Pocket:** `npm install --global pi-pocket@<latest>` with that Node's own npm, so the runtime is an ordinary
+- **Pi Pocket:** `npm install --global --prefix <runtime> pi-pocket@<latest>` with that Node's own npm, so the runtime is an ordinary
   global install and Pi Pocket's own updater (Settings → Updates in Pi Pocket) works in it. npm checks each package
   against the registry's integrity hash. Install scripts are off (`--ignore-scripts`): Pi Pocket needs none.
-- **A builtin npmrc** (`lib/node_modules/npm/npmrc`) pins `prefix` to the runtime folder, so this npm installs there
-  whichever `node` runs it.
+- **The runtime's npm stays its own:** Pi Pocket's updater runs the npm beside its Node and asks it for the global
+  folder. On macOS and Linux `bin/npm` is a script that runs the first `node` on PATH (the person's, with another
+  global folder), so the app rewrites `bin/npm` and `bin/npx` to run the runtime's Node, and npm's builtin config
+  (`lib/node_modules/npm/npmrc`) pins `prefix` to the runtime. Pi Pocket then sees an `npm-global` install.
 - A runtime is built in `runtimes/<id>.partial` and renamed when whole: a half-built runtime never takes a name.
 
 ### Running it
@@ -71,20 +79,21 @@ The app starts Pi Pocket's launcher, the same command a person types, with the r
   only there.
 - **Stopping:** at quit, the app asks the launcher to stop (it stops the server and its tunnel) and waits up to 15
   seconds. The app's own updates quit the same way.
-- **Problems** show on the config screen with the last lines of the log: a port in use, a data folder another Pi
-  Pocket holds, a failed download. A launcher that exits with Pi Pocket's configuration error (78) is not started
-  again until the person changes something.
+- **Problems** show on the config screen with the cause from the log: a port in use, a data folder another Pi Pocket
+  holds, a failed download. A launcher that exits with Pi Pocket's configuration error (78) is not started again
+  until the person does. Other stops are retried 5 times, waiting 2, 4, 8, 16, then 32 seconds.
 
 ### Keeping it current
 
 - Pi Pocket updates itself the way it does on any computer: its Settings → Updates checks npm, and can install by
   itself when no session has worked for 10 minutes.
-- The app checks, at start and then every few hours, for a newer Node.js LTS and a newer Pi Pocket. When there is
+- The app checks, at start and then as often as its own updates, for a newer Node.js LTS and a newer Pi Pocket. When there is
   one, it builds a new runtime in the background. The new runtime takes over at the next start of the app, or at once
   from Settings or the tray ("Restart Pi Pocket to update"). Sessions resume after the restart.
-- If the new runtime does not reach "ready" within 2 minutes, the app goes back to the previous one and says so. Old
-  runtimes are removed once a new one has started.
-- "Keep Pi Pocket up to date" (on by default) turns the app's checks off; Pi Pocket's own setting is separate.
+- If the new runtime stops before it is ready, or is not ready within 2 minutes, the app goes back to the previous one
+  and says so. Old runtimes and archives are removed once a new one has started.
+- "Keep Pi Pocket up to date" (on by default) turns the app's checks on or off; Pi Pocket's own setting is separate.
+  The checks follow Settings → Updates → How often.
 
 ## Not in phase 1
 

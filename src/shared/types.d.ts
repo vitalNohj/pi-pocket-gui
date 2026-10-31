@@ -22,10 +22,17 @@ export type TranslucencySupport =
     | { kind: "restart" }
     | { kind: "unsupported"; message: string };
 
+/** Where Pi Pocket runs: on this computer, started by the app, or elsewhere, opened by its address. */
+export type ServerMode = "local" | "remote";
+
+/** Who can reach this computer's Pi Pocket: Pi Pocket's own `--access` choices. */
+export type LocalAccess = "local" | "lan" | "tailscale" | "cloudflare";
+
 /** Every setting, as stored in config.json. */
 export interface Settings {
     server: {
-        /** The server's address: scheme, host, port, and an optional path. */
+        mode: ServerMode;
+        /** Another server's address: scheme, host, port, and an optional path. */
         url: string;
         /** Other origins the window may load, e.g. a sign-in page in front of the server (Cloudflare Access). */
         extraOrigins: string[];
@@ -72,6 +79,17 @@ export interface Settings {
         check: boolean;
         intervalHours: number;
     };
+    /** This computer's Pi Pocket (src/main/local-server.ts). A change takes a restart of it. */
+    local: {
+        /** The folder new sessions start in; empty: the home folder. */
+        folder: string;
+        port: number;
+        access: LocalAccess;
+        /** Pi Pocket's data (sessions, people, settings); empty: ~/.pi-pocket, as Pi Pocket in a terminal. */
+        data: string;
+        /** The app installs new versions of Pi Pocket and Node.js for it, for its next start. */
+        keepUpdated: boolean;
+    };
     appearance: {
         /** A see-through window, blurred where the desktop can: the page's grounds let the desktop show. */
         translucent: boolean;
@@ -102,7 +120,54 @@ export type ConfigReason =
     | { kind: "not-detected"; probe: ProbeResult }
     | { kind: "load-failed"; url: string; message: string }
     | { kind: "outage"; url: string; message: string }
-    | { kind: "crashed"; message: string };
+    | { kind: "crashed"; message: string }
+    /** Pi Pocket on this computer is not running yet, or stopped: the screen shows its state. */
+    | { kind: "local" };
+
+/** Where this computer's Pi Pocket stands. */
+export type LocalStatus =
+    /** Not installed yet. */
+    | "absent"
+    | "installing"
+    | "stopped"
+    | "starting"
+    | "running"
+    /** A Pi Pocket the app did not start answers at the port (one started in a terminal): the app opens that one. */
+    | "external"
+    | "stopping"
+    | "failed";
+
+/** The app's own check for newer Pi Pocket and Node.js versions. */
+export interface LocalUpdate {
+    status: "idle" | "checking" | "current" | "building" | "ready" | "error";
+    /** The versions found (checking, building) or built and waiting for a restart (ready). */
+    pocket?: string;
+    node?: string;
+    message?: string;
+    percent?: number;
+    checkedAt?: number;
+}
+
+export interface LocalState {
+    status: LocalStatus;
+    /** What is happening, or what went wrong, in words. */
+    message?: string;
+    /** While installing: the step, and how far a download is. */
+    progress?: { step: string; percent?: number };
+    /** The versions in use. */
+    installed?: { pocket: string; node: string };
+    /** The address it is open at, while it runs. */
+    url?: string;
+    /** The launcher's last lines, without login tokens. */
+    log: string[];
+    /** Settings changed since it started: they take a restart of it. */
+    restartNeeded: boolean;
+    update: LocalUpdate;
+    /** What an empty folder setting means here. */
+    defaults: { folder: string; data: string };
+    /** Where the app keeps the runtimes and the log. */
+    home: string;
+}
 
 /** Where the app's own update stands (src/main/updates.ts). */
 export interface UpdateState {
@@ -147,7 +212,20 @@ export interface ConfigState {
     theme: ThemeColors;
     platform: string;
     appVersion: string;
+    local: LocalState;
 }
+
+/** What the config page can ask of this computer's Pi Pocket. */
+export type LocalAction =
+    | "install"
+    | "start"
+    | "stop"
+    | "restart"
+    | "open"
+    | "check-updates"
+    | "show-log"
+    | "use-local"
+    | "use-remote";
 
 /** A pinned session's state, as the square in Pi Pocket's session list shows it (`data-state`). */
 export type PinState = "waiting" | "limited" | "working" | "failed" | "fresh" | "seen";
@@ -239,5 +317,8 @@ export interface GuiConfigApi {
     updateAction(): Promise<void>;
     /** Quits and starts the app again (a setting that needs a new window). */
     relaunch(): Promise<void>;
+    local(action: LocalAction): Promise<void>;
+    /** A folder picked in the system's dialog, or undefined when cancelled. */
+    chooseFolder(start: string): Promise<string | undefined>;
     onState(listener: (state: ConfigState) => void): () => void;
 }

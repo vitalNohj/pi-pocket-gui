@@ -3,7 +3,7 @@
  * that is not valid falls back to its default and is reported, so a hand edit with a typo never stops the app.
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, isAbsolute } from "node:path";
 import type { Settings, SettingsProblem } from "../shared/types";
 import { normalizeServerUrl } from "./url";
 
@@ -11,7 +11,7 @@ export const DEFAULT_SERVER_URL = "http://127.0.0.1:8787";
 
 export function defaultSettings(): Settings {
     return {
-        server: { url: DEFAULT_SERVER_URL, extraOrigins: [] },
+        server: { mode: "local", url: DEFAULT_SERVER_URL, extraOrigins: [] },
         connection: {
             autoConnect: true,
             probeTimeoutMs: 4000,
@@ -36,6 +36,7 @@ export function defaultSettings(): Settings {
             maxCallLength: 120,
         },
         updates: { check: true, intervalHours: 6 },
+        local: { folder: "", port: 8787, access: "local", data: "", keepUpdated: true },
         appearance: { translucent: false, opacity: 82, macMaterial: "under-window", windowsMaterial: "acrylic" },
     };
 }
@@ -107,9 +108,22 @@ const hotkey: Check<string> = (value) =>
         ? pass(value)
         : fail('must be a shortcut such as "CommandOrControl+Shift+P"');
 
+/** A folder: empty for the default, else an absolute path. */
+const path: Check<string> = (value) => {
+    if (typeof value !== "string") {
+        return fail("must be a folder's path");
+    }
+
+    const trimmed = value.trim();
+
+    return trimmed === "" || isAbsolute(trimmed) || /^[A-Za-z]:[\\/]/.test(trimmed) || trimmed.startsWith("~")
+        ? pass(trimmed)
+        : fail("must be a full path, such as /home/you/code, or empty");
+};
+
 /** The check for each setting, in the shape of Settings. */
 const schema: { [S in keyof Settings]: { [K in keyof Settings[S]]: Check<Settings[S][K]> } } = {
-    server: { url: serverUrl, extraOrigins: origins },
+    server: { mode: oneOf("local", "remote"), url: serverUrl, extraOrigins: origins },
     connection: {
         autoConnect: bool,
         probeTimeoutMs: int(500, 60_000),
@@ -134,6 +148,13 @@ const schema: { [S in keyof Settings]: { [K in keyof Settings[S]]: Check<Setting
         maxCallLength: int(20, 2000),
     },
     updates: { check: bool, intervalHours: int(1, 24 * 30) },
+    local: {
+        folder: path,
+        port: int(1024, 65535),
+        access: oneOf("local", "lan", "tailscale", "cloudflare"),
+        data: path,
+        keepUpdated: bool,
+    },
     appearance: {
         translucent: bool,
         opacity: int(0, 100),
@@ -157,6 +178,11 @@ export function validateSettings(input: unknown): { settings: Settings; problems
 
     if (!isRecord(input)) {
         return { settings, problems: [{ path: "(file)", message: "must be a JSON object" }] };
+    }
+
+    // Settings from before this computer could run Pi Pocket itself: they opened a server by its address.
+    if (isRecord(input.server) && !("mode" in input.server)) {
+        settings.server.mode = "remote";
     }
 
     for (const [section, value] of Object.entries(input)) {

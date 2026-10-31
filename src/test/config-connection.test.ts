@@ -18,6 +18,7 @@ async function page(probe: (input: string) => Promise<ProbeResult>, initial: Par
     const makeElement = () => ({
         value: "", textContent: "", hidden: false, disabled: false, checked: false, title: "",
         dataset: {} as Record<string, string>,
+        firstElementChild: { style: { width: "" } },
         style: { setProperty() {} },
         classList: { toggle() {} },
         listeners: new Map<string, (event: { preventDefault(): void }) => void>(),
@@ -32,12 +33,17 @@ async function page(probe: (input: string) => Promise<ProbeResult>, initial: Par
     const radio = { ...makeElement(), value: "url", checked: true };
     const parts = { ...makeElement(), value: "parts" };
     const translucent = makeElement(), opacity = makeElement();
+    // These tests are about another server: remote mode, with this computer's Pi Pocket not installed.
+    const remote = defaultSettings();
+    remote.server.mode = "remote";
     let state: ConfigState = {
-        settings: defaultSettings(), defaults: defaultSettings(), problems: [], configPath: "/test/config.json",
+        settings: remote, defaults: defaultSettings(), problems: [], configPath: "/test/config.json",
         reason: { kind: "first-run" }, canReturn: false, recovery: false, trayAvailable: true,
         translucency: { kind: "live", blur: "system" }, translucentAtStart: false,
         titleBarAtStart: "seamless", theme: DEFAULT_THEME, platform: "win32", appVersion: "test",
-        update: { method: "source", status: "idle" }, ...initial,
+        update: { method: "source", status: "idle" },
+        local: { status: "absent", log: [], restartNeeded: false, update: { status: "idle" }, defaults: { folder: "/home/test", data: "/home/test/.pi-pocket" }, home: "/test/server" },
+        ...initial,
     };
     let render: (next: ConfigState) => void = () => undefined;
     let settingsOpened = 0;
@@ -138,6 +144,7 @@ test("a late check result cannot connect after the person edits the address", as
 test("a saved address already known to be wrong has no enabled Connect button", async () => {
     const settings = defaultSettings();
 
+    settings.server.mode = "remote";
     settings.server.url = url;
     const screen = await page(async () => apiError, { settings, probe: apiError });
 

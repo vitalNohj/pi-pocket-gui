@@ -19,6 +19,8 @@ const api: GuiConfigApi = {
     checkUpdates: () => ipcRenderer.invoke("config:check-updates") as Promise<void>,
     updateAction: () => ipcRenderer.invoke("config:update-action") as Promise<void>,
     relaunch: () => ipcRenderer.invoke("config:relaunch") as Promise<void>,
+    local: (action) => ipcRenderer.invoke("config:local", action) as Promise<void>,
+    chooseFolder: (start: string) => ipcRenderer.invoke("config:choose-folder", start) as Promise<string | undefined>,
     onState: (listener) => {
         const handler = (_event: unknown, state: ConfigState) => {
             listener(state);
