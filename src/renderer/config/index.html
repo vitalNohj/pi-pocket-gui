@@ -8,7 +8,11 @@
         <script type="module" src="main.js"></script>
     </head>
     <body>
-        <main class="page">
+        <aside id="recovery" class="recovery-bar" aria-label="Desktop app navigation" hidden>
+            <button type="button" id="server-settings" class="secondary">← Server settings</button>
+            <span class="small">Pi Pocket hasn’t been detected here. Sign in, or return to Server settings.</span>
+        </aside>
+        <main id="settings-page" class="page">
             <header class="brand">
                 <span class="logo" aria-hidden="true">π</span>
                 <div>
@@ -74,8 +78,10 @@
                             </div>
                         </form>
                         <p class="muted small">
-                            Sign in inside Pi Pocket after it opens, with your login link or an invite from another device.
+                            Use the address that opens Pi Pocket in your browser, not a model/API endpoint. Sign in after
+                            it opens, with your login link or an invite from another device.
                         </p>
+                        <p id="settings-shortcut" class="muted small"></p>
                     </section>
 
                     <section class="card get" aria-labelledby="get-title">

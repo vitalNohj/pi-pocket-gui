@@ -81,7 +81,9 @@ Change the theme in Pi Pocket and the app follows: the settings screen, the wind
 
 ### Settings
 
-Everything is on one screen: **Server settings…** in the File menu, the tray, Pi Pocket's own menu, or Ctrl+, (⌘, on macOS). The badge says **Connected** once Pi Pocket is open; **Connect** waits until you change the address and check the new one.
+Everything is on one screen: **Server settings…** in the File menu, the tray, Pi Pocket's own menu, a right-click on the page, or Ctrl+, (⌘, on macOS). The shortcut belongs to the desktop app and works even on a broken server page. The badge says **Connected** once Pi Pocket is open; **Connect** waits until you change the address and check the new one.
+
+Use the **web interface address** that opens Pi Pocket in your browser, not a model/API endpoint. A failed check keeps you in settings and does not replace your saved server or close a working connection. If a sign-in gateway prevents detection, **Open webpage anyway** is offered only for an HTML page; an app-owned **Server settings** button stays visible until Pi Pocket is detected. HTTP errors and non-webpage responses (including JSON) reopen settings automatically rather than leaving you on an error page.
 
 <img src="docs/images/settings.png" alt="The settings screen: the connection on the left, the Window settings on the right" width="100%" />
 
