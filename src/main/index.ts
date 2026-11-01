@@ -414,7 +414,14 @@ async function start(): Promise<void> {
         theme: () => gui!.theme,
         dictation: () => gui?.dictation?.state().supported === true,
         computerName: () => computerName(),
-        linkRunner: (server, code) => gui!.runner!.linkTo(server, code),
+        linkRunner: async (server, code) => {
+            await gui!.runner!.linkTo(server, code);
+
+            // The runner runs from Pi Pocket on this computer: keep that current, also while another server is in use.
+            if (gui!.settings.server.mode !== "local") {
+                gui!.local!.keepCurrent();
+            }
+        },
         themeChanged: (next) => {
             const state = gui!;
 

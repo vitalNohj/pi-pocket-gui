@@ -65,6 +65,8 @@ export function setUpRunner(host: RunnerHost) {
     let runningFrom: string | undefined;
     let busy: string | undefined;
     let quitting = false;
+    /** A step (linking, unlinking) stopped it on purpose: what it does next is the step's to decide. */
+    let holding = false;
 
     const readLink = (): Link | undefined => {
         try {
@@ -204,6 +206,11 @@ export function setUpRunner(host: RunnerHost) {
             if (quitting || status === "stopping" || !host.enabled()) {
                 set(readLink() === undefined ? "unlinked" : "off");
 
+                // Turned on again while it was stopping: start it now, as the setting says.
+                if (!quitting && !holding && host.enabled()) {
+                    void start();
+                }
+
                 return;
             }
 
@@ -307,21 +314,34 @@ export function setUpRunner(host: RunnerHost) {
                     }
                 }
 
-                await stop();
-                await mkdir(host.home, { recursive: true });
-                busy = "Linking this computer…";
-                host.changed();
-                log(await runOnce(["link", server, code]));
-                failures = 0;
-                await host.setEnabled(true);
-                await start();
+                holding = true;
+
+                try {
+                    await stop();
+                    await mkdir(host.home, { recursive: true });
+                    busy = "Linking this computer…";
+                    host.changed();
+                    log(await runOnce(["link", server, code]));
+                    failures = 0;
+                    await host.setEnabled(true);
+                } finally {
+                    // Linked, or not: the link there is now (the new one, or the one before) runs again.
+                    holding = false;
+                    await start();
+                }
             }),
         /** Forget the link; the computer stays listed on the server until removed there. */
         unlink: (): Promise<void> =>
             step("Unlinking…", async () => {
-                await stop();
-                await rm(linkFile, { force: true });
-                set("unlinked");
+                holding = true;
+
+                try {
+                    await stop();
+                    await rm(linkFile, { force: true });
+                    set("unlinked");
+                } finally {
+                    holding = false;
+                }
             }),
         /** Turn running it on or off (the setting already changed). */
         enabledChanged: (): void => {
@@ -332,7 +352,11 @@ export function setUpRunner(host: RunnerHost) {
 
                 void start();
             } else {
-                void stop().then(() => set(readLink() === undefined ? "unlinked" : "off"));
+                void stop().then(() => {
+                    if (!host.enabled()) {
+                        set(readLink() === undefined ? "unlinked" : "off");
+                    }
+                });
             }
         },
         restart: async (): Promise<void> => {
