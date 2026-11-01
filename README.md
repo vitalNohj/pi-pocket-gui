@@ -67,9 +67,9 @@ Everything lives in the app's data folder (below), in `server/`: the runtimes an
 
 ### A window without a title bar
 
-Pi Pocket runs to the window's top edge, and only what sits under the window's buttons makes room for them: on macOS the sidebar starts a little lower and the conversation keeps its whole height. On Windows and Linux the buttons sit at the top right instead.
+Pi Pocket runs to the window's top edge, and only what sits under the window's buttons makes room for them: on macOS the sidebar starts a little lower and the conversation keeps its whole height. On Windows and Linux the buttons sit at the top right instead, and the tiled window under them is notched around them: its border goes down and around the buttons rather than under them.
 
-<img src="docs/images/windows.png" alt="The Windows and Linux layout: minimize, maximize, and close over the conversation's top bar, which makes room for them" width="100%" />
+<img src="docs/images/windows.png" alt="The Windows and Linux layout: minimize, maximize, and close at the top right, with the conversation's border notched around them" width="100%" />
 
 The app tells the page where the buttons are through the [Window Controls Overlay](https://developer.mozilla.org/en-US/docs/Web/API/Window_Controls_Overlay_API), the web's own standard for it. An older Pi Pocket gets a plain band as tall as the buttons. Drag the window by the bar beside them. Settings → Window → Title bar → **The system's** brings back the normal title bar, after a restart.
 
