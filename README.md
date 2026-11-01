@@ -14,6 +14,9 @@ Pi Pocket installed and kept current for you · a tray with your pinned sessions
 
 </div>
 
+> [!WARNING]
+> **Windows Defender may block the Windows installer.** It flags `pi-pocket-gui-0.2.6-win-x64.exe` as `Program:Win32/Contebrew.A!ml`, a machine-learning guess (`!ml`), not a match with any known malware. The build isn't code-signed yet. The file has been submitted to Microsoft as a false positive. Until it's cleared: in Windows Security → **Protection history**, open the entry and choose **Allow**, then download it again. The source and the build are public: [the workflow](.github/workflows/build.yml) builds every release.
+
 > [!NOTE]
 > **Remote execution is still being worked on.** Pi works on the files and runs the commands of the computer the server is on. With Pi Pocket on this computer, that is this computer. With a server elsewhere (a home server, a VPS), it is that machine, not this one: working on this computer's files from a remote server needs remote execution, which is not in the app yet.
 
@@ -41,7 +44,7 @@ Download the app for your computer from [**Releases**](https://github.com/vitalN
 | | File | |
 |---|---|---|
 | **macOS** | `…-mac-arm64.dmg` (Apple Silicon) or `…-mac-x64.dmg` (Intel) | Drag the app into Applications. It is not signed by Apple yet: the first time, right-click it and choose **Open**. If macOS still refuses, use **Open Anyway** in System Settings → Privacy & Security, or run `xattr -cr "/Applications/Pi Pocket.app"`. |
-| **Windows** | `…-win-x64.exe` | SmartScreen warns about an unsigned app: **More info** → **Run anyway**. |
+| **Windows** | `…-win-x64.exe` | SmartScreen warns about an unsigned app: **More info** → **Run anyway**. Defender may block it as a false positive: [see above](#pi-pocket-for-desktop). |
 | **Linux** | `…-linux-x86_64.AppImage` or `…-linux-amd64.deb` | Make the AppImage executable and run it, or install the .deb. |
 
 Open the app and pick where Pi Pocket runs:
