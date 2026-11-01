@@ -307,15 +307,21 @@
                         </div>
                     </details>
 
-                    <details class="card">
-                        <summary><h2>Connection to another server</h2></summary>
+                    <details class="card" id="remote-settings-card">
+                        <summary><h2>Remote server</h2></summary>
                         <div class="rows">
+                            <p class="card-note">How the app opens and watches a Pi Pocket on another computer.</p>
                             <label class="row"><span><strong>Open the server at start</strong><small>When it answers. Otherwise this screen shows first.</small></span><input type="checkbox" data-key="connection.autoConnect" /></label>
-                            <label class="row"><span><strong>Check timeout</strong><small>Milliseconds.</small></span><input type="number" data-key="connection.probeTimeoutMs" class="short" min="500" max="60000" /></label>
-                            <label class="row"><span><strong>Longest wait between tries</strong><small>Seconds, while the server does not answer.</small></span><input type="number" data-key="connection.retryMaxSeconds" class="short" min="2" max="3600" /></label>
-                            <label class="row"><span><strong>Check while connected</strong><small>Every so many seconds; 0 turns it off.</small></span><input type="number" data-key="connection.healthIntervalSeconds" class="short" min="0" max="3600" /></label>
-                            <label class="row"><span><strong>Failed checks before an outage</strong></span><input type="number" data-key="connection.failuresBeforeOutage" class="short" min="1" max="100" /></label>
-                            <label class="row stack"><span><strong>Other allowed origins</strong><small>One per line. Pages the window may show besides the server, such as a sign-in page in front of it (Cloudflare Access).</small></span><textarea data-key="server.extraOrigins" rows="2" spellcheck="false" placeholder="https://myteam.cloudflareaccess.com"></textarea></label>
+                            <label class="row stack"><span><strong>Other allowed origins</strong><small>One per line. Pages the window may show besides the server, such as a sign-in page in front of it (Cloudflare Access). Other links open in your browser.</small></span><textarea data-key="server.extraOrigins" rows="2" spellcheck="false" placeholder="https://myteam.cloudflareaccess.com"></textarea></label>
+                            <details class="advanced">
+                                <summary>Advanced: checks and retries</summary>
+                                <div class="rows nested">
+                                    <label class="row"><span><strong>Check while connected</strong><small>Seconds between checks while Pi Pocket is open; 0 turns them off.</small></span><input type="number" data-key="connection.healthIntervalSeconds" class="short" min="0" max="3600" /></label>
+                                    <label class="row"><span><strong>Failed checks before an outage</strong><small>Then this screen shows that the server is down, and the app keeps trying.</small></span><input type="number" data-key="connection.failuresBeforeOutage" class="short" min="1" max="100" /></label>
+                                    <label class="row"><span><strong>Longest wait between tries</strong><small>Seconds, while the server does not answer. The wait grows up to this.</small></span><input type="number" data-key="connection.retryMaxSeconds" class="short" min="2" max="3600" /></label>
+                                    <label class="row"><span><strong>Check timeout</strong><small>Milliseconds one check waits for an answer.</small></span><input type="number" data-key="connection.probeTimeoutMs" class="short" min="500" max="60000" /></label>
+                                </div>
+                            </details>
                         </div>
                     </details>
 

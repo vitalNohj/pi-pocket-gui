@@ -479,7 +479,7 @@ summary::after {
     transition: transform 120ms ease;
 }
 
-details[open] summary::after {
+details[open] > summary::after {
     transform: rotate(90deg);
 }
 
@@ -696,6 +696,32 @@ input[type="range"] {
     to {
         transform: translateX(340%);
     }
+}
+
+.card-note {
+    margin: 0 0 10px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+details.advanced {
+    border-top: 1px solid var(--hair);
+}
+
+details.advanced > summary {
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 10px 0;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+details.advanced > summary::after {
+    font-size: 16px;
+}
+
+.rows.nested {
+    padding: 0 0 0 12px;
 }
 
 details.log summary {
