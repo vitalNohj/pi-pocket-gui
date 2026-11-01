@@ -126,7 +126,7 @@ A Pi Pocket server can run a session's tools on this computer: its files and com
 - **Use it:** in Computers, **New session** on this computer picks a folder here. The session's title says which computer it runs on.
 - The **This computer as a runner** card shows whether it is connected, turns the runner off and on, and unlinks it. Off, or with the app closed, the server shows the computer as offline, and its sessions' tools fail until it is back. A short drop (up to 2 minutes) loses nothing: running commands carry on.
 - **Another computer, such as a server:** the card and the Computers sheet give the steps: `npm install -g` Pi Pocket there, `pi-pocket runner link <server> <code>`, then `pi-pocket runner service` (Linux with systemd) or `pi-pocket runner` in a terminal.
-- Anyone who can prompt such a session can do on this computer what you can. Only the server's owner can start one.
+- Only you can start, see, and prompt sessions on a computer you linked. Nobody else on the server gets them in their list, and their subagents and forks stay yours.
 
 The server must have runner support: Pi Pocket from [vitalNohj/pi-pocket](https://github.com/vitalNohj/pi-pocket) `live-0.28` for now, which the app also installs for **This computer**.
 
