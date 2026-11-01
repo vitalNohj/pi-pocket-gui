@@ -1108,13 +1108,6 @@ function renderRunner(next: ConfigState): void {
     unlink.hidden = link === undefined;
     unlink.disabled = busy;
 
-    // The address of the server the app shows, as the command to link another computer to it.
-    const server = link?.server ?? next.connectedUrl;
-
-    if (server !== undefined) {
-        element("runner-link").textContent = `pi-pocket runner link ${new URL(server).origin} CODE`;
-    }
-
     element("runner-log-box").hidden = runner.log.length === 0;
     element("runner-log").textContent = runner.log.join("\n");
 }
