@@ -60,8 +60,8 @@ export async function probe(input: string, fetcher: Fetch, timeoutMs: number): P
         status: manifest.status,
         canOpen,
         message: canOpen
-            ? "A webpage answered, but Pi Pocket was not detected. If a sign-in page protects your server, you can open the webpage anyway and sign in. A Server settings button stays available."
-            : `Something answered (HTTP ${String(manifest.status)}), but it does not look like Pi Pocket. Use the Pi Pocket web interface address, not a model/API endpoint. The app has not connected.`,
+            ? "A webpage answered, but Pi Pocket was not detected. If this is your server’s sign-in page, choose Open webpage anyway. Server settings stays available."
+            : `The server answered HTTP ${String(manifest.status)}, but Pi Pocket was not detected. Use its browser address, not a model API address. The app has not connected.`,
     };
 }
 
@@ -101,7 +101,7 @@ export function networkMessage(error: unknown, timeoutMs: number): string {
     }
 
     if (/ECONNREFUSED|CONNECTION_REFUSED/i.test(text)) {
-        return "Nothing listens at that address and port.";
+        return "No server is listening at that address and port.";
     }
 
     if (/ENOTFOUND|NAME_NOT_RESOLVED|EAI_AGAIN/i.test(text)) {
@@ -109,7 +109,7 @@ export function networkMessage(error: unknown, timeoutMs: number): string {
     }
 
     if (/CERT|SSL|TLS/i.test(text)) {
-        return `The server's https certificate is not trusted (${text}).`;
+        return `The server's HTTPS certificate is not trusted (${text}).`;
     }
 
     if (/ADDRESS_UNREACHABLE|EHOSTUNREACH|ENETUNREACH|INTERNET_DISCONNECTED/i.test(text)) {

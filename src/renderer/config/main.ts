@@ -1,4 +1,4 @@
-/** The config screen: the connection on top, how to get a server below it, then the settings. */
+/** Server settings: connection, app preferences, then server tools. */
 import type { BillionContextAction, ConfigReason, ConfigState, DictationModelState, GuiConfigApi, LocalAction, LocalState, ProbeResult, RunnerState, Settings } from "../../shared/types";
 
 declare global {
@@ -137,8 +137,8 @@ function showStatus(probe: ProbeResult | undefined, pending?: string): void {
             status.textContent = "Detected";
             statusDetail.textContent =
                 probe.bridge > 0
-                    ? `Pi Pocket answers at ${probe.url}, with desktop support.`
-                    : `Pi Pocket answers at ${probe.url}. It has no desktop support yet (notifications, tray pins): please update it.`;
+                    ? `Pi Pocket is available at ${probe.url}.`
+                    : `Pi Pocket is available at ${probe.url}. Update the server to enable notifications and tray pins.`;
             break;
         case "other":
             status.dataset.state = "other";
@@ -148,7 +148,7 @@ function showStatus(probe: ProbeResult | undefined, pending?: string): void {
         case "unreachable":
             status.dataset.state = "not-detected";
             status.textContent = "Not detected";
-            statusDetail.textContent = `Nothing answered at ${probe.url}. ${probe.message}`;
+            statusDetail.textContent = `Cannot reach ${probe.url}. ${probe.message}`;
             break;
         case "invalid":
             status.dataset.state = "not-detected";
@@ -190,8 +190,8 @@ function showConnected(next: ConfigState): void {
     status.textContent = "Connected";
     statusDetail.textContent =
         bridge > 0
-            ? `Pi Pocket is open at ${next.connectedUrl ?? ""}, with desktop support.`
-            : `Pi Pocket is open at ${next.connectedUrl ?? ""}. It has no desktop support yet (notifications, tray pins): please update it.`;
+            ? `Pi Pocket is open at ${next.connectedUrl ?? ""}.`
+            : `Pi Pocket is open at ${next.connectedUrl ?? ""}. Update the server to enable notifications and tray pins.`;
 }
 
 function checkedHere(): ProbeResult | undefined {
@@ -228,7 +228,7 @@ function updateConnect(): void {
         connectButton.title = "Already open at this address. Use Back to Pi Pocket to return.";
     } else if (current !== undefined) {
         connectButton.disabled = current.kind !== "detected" && !unverified;
-        connectButton.title = connectButton.disabled ? "Pi Pocket was not detected. Check its web interface address." : "";
+        connectButton.title = connectButton.disabled ? "Pi Pocket was not detected. Check the server address." : "";
     } else {
         connectButton.disabled = state?.connectedUrl !== undefined;
         connectButton.title = connectButton.disabled ? "Check the new address first." : "";
@@ -245,11 +245,11 @@ function reasonBanner(reason: ConfigReason): { text: string; tone: "error" | "in
         case "load-failed":
             return { text: `Pi Pocket did not load from ${reason.url}: ${reason.message}`, tone: "error" };
         case "outage":
-            return { text: `Lost the connection to ${reason.url}: ${reason.message} The app goes back as soon as it answers.`, tone: "error" };
+            return { text: `Lost connection to ${reason.url}. ${reason.message} The app reconnects when the server answers.`, tone: "error" };
         case "crashed":
-            return { text: `${reason.message} Retry opens Pi Pocket again.`, tone: "error" };
+            return { text: `${reason.message} Choose Retry now to reopen Pi Pocket.`, tone: "error" };
         case "first-run":
-            return { text: "Welcome. Check the server's address, then connect.", tone: "info" };
+            return { text: "Choose where Pi Pocket runs. Connect to an existing server, or install it on this computer.", tone: "info" };
         case "local":
             return undefined;
         default:
@@ -267,10 +267,10 @@ function renderUpdate(next: ConfigState): void {
     const busy = update.status === "checking" || update.status === "downloading";
     const when = update.checkedAt === undefined ? "" : `Checked ${new Date(update.checkedAt).toLocaleString()}.`;
     const how: Record<typeof update.method, string> = {
-        install: "Updates download by themselves and install when the app restarts.",
-        download: "This Mac build isn't signed by Apple, so updates can't install themselves: the app downloads the new disk image, then quits and opens it. Drag the app over the old one, then open it again.",
-        page: "Install updates the way you installed this app.",
-        source: "Run from source: git pull updates it.",
+        install: "Updates download automatically. Restart the app to install them.",
+        download: "This unsigned macOS app cannot update itself. Download the update, then choose Quit and open. Replace the app in Applications and reopen it.",
+        page: "Open the release page and install the new version.",
+        source: "Running from source. Use git pull to update the app.",
     };
     let status = "Not checked yet";
     let label = "";
@@ -280,21 +280,21 @@ function renderUpdate(next: ConfigState): void {
             status = "Checking…";
             break;
         case "current":
-            status = update.method === "source" ? `Run from source (${next.appVersion})` : `Up to date (${next.appVersion})`;
+            status = update.method === "source" ? `Running from source (${next.appVersion})` : `App up to date (${next.appVersion})`;
             break;
         case "available":
-            status = `Pi Pocket ${update.version ?? ""} is available`;
+            status = `Desktop app ${update.version ?? ""} is available`;
             label = update.method === "download" ? "Download" : update.method === "page" ? "Open release" : "";
             break;
         case "downloading":
             status = `Downloading ${update.version ?? ""}… ${update.percent ?? 0}%`;
             break;
         case "ready":
-            status = update.method === "install" ? `Pi Pocket ${update.version ?? ""} is ready` : `Pi Pocket ${update.version ?? ""} is downloaded`;
-            label = update.method === "install" ? "Restart now" : "Quit and open";
+            status = update.method === "install" ? `Desktop app ${update.version ?? ""} is ready` : `Desktop app ${update.version ?? ""} downloaded`;
+            label = update.method === "install" ? "Restart app" : "Quit and open";
             break;
         case "error":
-            status = "The check failed";
+            status = "Update check failed";
             break;
         default:
             break;
@@ -331,10 +331,10 @@ function renderTheme(next: ConfigState): void {
 // ——— This computer's Pi Pocket ———
 
 const ACCESS_NOTES: Record<string, string> = {
-    local: "Only this computer. Share sessions with a phone through Tailscale or a Cloudflare link instead.",
-    lan: "Phones and computers on the same Wi-Fi. Anyone on it can reach the sign-in page.",
-    tailscale: "Your devices on Tailscale, wherever they are. Needs Tailscale running on this computer.",
-    cloudflare: "A public https link through Cloudflare, for a phone anywhere. Pi Pocket downloads cloudflared once.",
+    local: "Only this computer can connect. To use a phone, choose Tailscale or Cloudflare.",
+    lan: "Devices on the same network can reach the sign-in page.",
+    tailscale: "Your Tailscale devices can connect from anywhere. Tailscale must run on this computer.",
+    cloudflare: "Create a public HTTPS link. Pi Pocket downloads Cloudflare's tunnel software once.",
 };
 
 const LOCAL_LABELS: Record<LocalState["status"], { pill: string; state: string }> = {
@@ -370,12 +370,12 @@ function renderLocal(next: ConfigState): void {
 
     const versions = local.installed === undefined ? "" : `Pi Pocket ${local.installed.pocket}, Node.js ${local.installed.node}.`;
     const detail: Record<LocalState["status"], string> = {
-        absent: "Pi Pocket runs on this computer while the app runs, also hidden in the tray. Install downloads it and the Node.js it needs (about 60 MB, 400 MB on disk), from npm and nodejs.org.",
+        absent: "Downloads Pi Pocket and Node.js (about 60 MB; 400 MB on disk).",
         installing: local.message ?? "Installing…",
         stopped: `${versions} It starts with the app.`,
         starting: `${versions} Starting…`,
-        running: `${versions} Open at ${local.url ?? ""}. It stops when you quit the app; running sessions pick up at the next start.`,
-        external: `${local.message ?? "Pi Pocket already runs at this port."} Open it, or stop it and start this computer's own.`,
+        running: `${versions} Open at ${local.url ?? ""}. Quitting the app stops the server. Sessions continue at the next start.`,
+        external: `${local.message ?? "Pi Pocket already runs on this port."} Open it, or stop it outside the app to run a server here.`,
         stopping: "Stopping…",
         failed: local.message ?? "Pi Pocket stopped.",
     };
@@ -416,7 +416,7 @@ function renderLocal(next: ConfigState): void {
         current: "Up to date",
         building: `Installing Pi Pocket ${update.pocket ?? ""}${update.percent === undefined ? "" : ` (${String(update.percent)}%)`}…`,
         ready: `Pi Pocket ${update.pocket ?? ""} is ready`,
-        error: "The update failed",
+        error: "Server update failed",
     };
 
     element("local-update-status").textContent = updateStatus[update.status];
@@ -424,7 +424,7 @@ function renderLocal(next: ConfigState): void {
         update.status === "error"
             ? update.message ?? ""
             : update.status === "ready"
-              ? "It takes over when Pi Pocket restarts: Restart above, the tray, or the next start of the app."
+              ? "Restart Pi Pocket to use the update. You can also quit and reopen the app."
               : update.checkedAt === undefined
                 ? ""
                 : `Checked ${new Date(update.checkedAt).toLocaleString()}.`;
@@ -484,7 +484,7 @@ function render(next: ConfigState): void {
     document.body.classList.toggle("recovering", next.recovery);
     element("recovery").hidden = !next.recovery;
     element("settings-page").hidden = next.recovery;
-    element("settings-shortcut").textContent = `Return to Server settings any time with ${next.platform === "darwin" ? "⌘," : "Ctrl+,"}, the tray menu, or a right-click on the page.`;
+    element("settings-shortcut").textContent = `Open Server settings from the tray menu, with a right-click on the page, or with ${next.platform === "darwin" ? "⌘ + comma" : "Ctrl + comma"}.`;
     renderLocal(next);
     renderDictation(next);
     renderBillionContext(next);
@@ -546,7 +546,7 @@ async function check(): Promise<ProbeResult | undefined> {
 
     if (url === "") {
         urlError.hidden = false;
-        urlError.textContent = "Type the server's address.";
+        urlError.textContent = "Enter the server address.";
 
         return undefined;
     }
@@ -704,8 +704,8 @@ function renderSettings(next: ConfigState): void {
     renderTitleBar(next);
 
     element("tray-note").textContent = next.trayAvailable
-        ? "Closing the window keeps the app running in the tray, so notifications keep coming."
-        : "This desktop shows no tray icons (on GNOME, the AppIndicator extension adds them), so closing minimizes instead.";
+        ? "Keep the app running for notifications after you close the window."
+        : "No tray is available, so closing minimizes the window. On GNOME, install the AppIndicator extension to add a tray.";
 
     const problems = element("problems");
     const list = element("problem-list");
@@ -760,7 +760,7 @@ function scheduleSave(): void {
             const next = await gui.save(collect());
 
             render(next);
-            saved.textContent = next.problems.length === 0 ? "Saved" : "Saved, with problems below";
+            saved.textContent = next.problems.length === 0 ? "Saved" : "Saved. Check the values above.";
             window.setTimeout(() => {
                 saved.textContent = "";
             }, 2000);
@@ -776,8 +776,8 @@ function renderTitleBar(next: ConfigState): void {
     element("menu-bar-row").hidden = next.platform === "darwin" || next.titleBarAtStart === "seamless";
     element("title-bar-note").textContent =
         next.platform === "darwin"
-            ? "Seamless: Pi Pocket runs to the window's top edge, under the traffic lights."
-            : "Seamless: Pi Pocket runs to the window's top edge, under the window's buttons. The menu bar's keys still work (Ctrl+, opens these settings).";
+            ? "Seamless puts the window buttons over the page."
+            : "Seamless puts the window buttons over the page. Menu shortcuts still work, such as Ctrl + comma for Server settings.";
 }
 
 /** The Appearance card: what this desktop can do, and the config screen itself see-through like the server's page. */
@@ -798,8 +798,8 @@ function renderAppearance(next: ConfigState): void {
         toggle.disabled = false;
         note.textContent =
             next.platform === "linux"
-                ? "The desktop shows through Pi Pocket's background. Your compositor blurs it if set to (Hyprland's decoration:blur, KDE's Blur effect); GNOME shows it unblurred."
-                : "The desktop shows through Pi Pocket's background, blurred.";
+                ? "Shows the desktop behind Pi Pocket. Enable blur in Hyprland (decoration:blur) or KDE (Blur effect). GNOME shows no blur."
+                : "Show the desktop behind Pi Pocket, with blur.";
     }
 
     // Linux: on takes a new window; off works now, but the window stays see-through-capable until a restart.
@@ -956,7 +956,7 @@ function renderDictation(next: ConfigState): void {
     message.textContent = dictation.message ?? "";
 
     if (!dictation.supported) {
-        element("dictation-note").textContent = "Dictation has no speech engine for this computer's system and processor.";
+        element("dictation-note").textContent = "Dictation is not available for this computer's operating system or processor.";
         list.replaceChildren();
         card.querySelectorAll<HTMLElement>(".row").forEach((row) => row.classList.add("off"));
 
@@ -979,7 +979,7 @@ gui.onFocus((section) => {
     }
 });
 
-// ——— Billion-context Pi ———
+// ——— Billion context ———
 
 function billionContextAction(action: BillionContextAction): void {
     gui.billionContext(action).catch(() => {
@@ -1016,21 +1016,21 @@ function renderBillionContext(next: ConfigState): void {
     if (installed === undefined) {
         status = extension.foreign ? "Installed outside the app" : "Not installed";
         detail = extension.foreign
-            ? "Its folder is in Pi Pocket's extensions folder under another name. Manage it in Pi Pocket's Menu → Extensions, or remove that copy to let the app install it."
+            ? "Installed under another name. Manage it in Menu → Extensions, or remove that copy before installing here."
             : extension.server === "absent"
-              ? "Install Pi Pocket on this computer first (above)."
+              ? "First, install Pi Pocket under This computer in Connection."
               : extension.server === "stopped"
-                ? "Start Pi Pocket first: the app turns the extension on through it."
-                : "Install downloads it from GitHub (about 1 MB, 4 MB on disk) and turns it on.";
+                ? "Start Pi Pocket before installing or turning on the extension."
+                : "Download from GitHub and turn it on (about 1 MB; 4 MB on disk).";
     } else {
         const state = installed.error !== undefined ? "failed to load" : installed.enabled === true ? "on" : installed.enabled === false ? "off" : "";
 
-        status = `billion-context-pi ${installed.version}${state === "" ? "" : `, ${state}`}`;
+        status = `Version ${installed.version}${state === "" ? "" : ` · ${state}`}`;
         detail = installed.error ?? (
             installed.commit === undefined
-                ? "Installed outside the app: it does not update it."
+                ? "Installed outside the app. Update it manually."
                 : extension.updateAvailable
-                  ? `A newer version${latest} is out.${checked}`
+                  ? `Update available${latest}.${checked}`
                   : extension.checkedAt === undefined
                     ? ""
                     : `Up to date.${checked}`
@@ -1069,15 +1069,15 @@ element("bc-page").addEventListener("click", (event) => {
     billionContextAction("open-page");
 });
 
-// ——— This computer as a runner ———
+// ——— Runner ———
 
 const RUNNER_STATUS: Record<RunnerState["status"], string> = {
     unlinked: "Not linked",
-    off: "Linked, turned off",
+    off: "Turned off",
     connecting: "Connecting…",
     connected: "Connected",
     failed: "Stopped",
-    ended: "The server ended the link",
+    ended: "Link ended",
     stopping: "Stopping…",
 };
 
@@ -1088,11 +1088,11 @@ function renderRunner(next: ConfigState): void {
     let detail: string;
 
     if (link === undefined) {
-        detail = "No server can run tools here yet.";
+        detail = "Link this computer to let your server use its files and commands.";
     } else if (runner.status === "connected") {
-        detail = `As "${link.name}" for ${link.server}: its sessions on this computer can run.`;
+        detail = `Linked as “${link.name}” to ${link.server}. Sessions can use this computer.`;
     } else {
-        detail = `As "${link.name}" for ${link.server}.${runner.message === undefined ? "" : ` ${runner.message}`}`;
+        detail = `Linked as “${link.name}” to ${link.server}.${runner.message === undefined ? "" : ` ${runner.message}`}`;
     }
 
     element("runner-status").textContent = runner.busy ?? RUNNER_STATUS[runner.status] ?? "";

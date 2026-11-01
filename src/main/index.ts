@@ -1653,7 +1653,7 @@ function registerIpc(): void {
                     defaultId: 1,
                     cancelId: 1,
                     message: "Unlink this computer?",
-                    detail: `The runner stops, and ${link?.server ?? "the server"} can no longer run sessions' tools here. Remove "${link?.name ?? "this computer"}" under Menu → Computers there too.`,
+                    detail: `The runner stops, and ${link?.server ?? "the server"} can no longer run sessions' tools here. Remove "${link?.name ?? "this computer"}" under Menu → Runners there too.`,
                 });
 
                 if (answer.response === 0) {

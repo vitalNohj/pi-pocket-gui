@@ -99,7 +99,7 @@ export function setUpRunner(host: RunnerHost) {
         const runtime = host.runtime();
 
         if (runtime === undefined) {
-            throw new Error("Pi Pocket on this computer has no runner yet.");
+            throw new Error("The runner is not installed on this computer.");
         }
 
         const env = await host.environment();
@@ -149,7 +149,7 @@ export function setUpRunner(host: RunnerHost) {
         const runtime = host.runtime();
 
         if (runtime === undefined) {
-            set("failed", "Pi Pocket on this computer has no runner. Install or update it under This computer.");
+            set("failed", "Install or update Pi Pocket under This computer in Connection to use the runner.");
 
             return;
         }
@@ -186,7 +186,7 @@ export function setUpRunner(host: RunnerHost) {
                 failures = 0;
                 set("connected");
             } else if (/\] Disconnected/.test(line)) {
-                set("connecting", "Reconnecting; work that runs here waits.");
+                set("connecting", "Reconnecting. Sessions must wait for the server.");
             } else if (/\] Connection: /.test(line) && status !== "connected") {
                 set("connecting", plain(line).replace(/^\[[^\]]*\] Connection: /, "Cannot reach the server: "));
             }
@@ -225,7 +225,7 @@ export function setUpRunner(host: RunnerHost) {
             failures += 1;
             const wait = Math.min(60, 2 ** Math.min(failures, 6));
 
-            set("failed", `The runner stopped (${signal ?? `code ${String(code)}`}); starting it again in ${String(wait)} s. ${last}`.trim());
+            set("failed", `The runner stopped (${signal ?? `code ${String(code)}`}). Restarting in ${String(wait)} s. ${last}`.trim());
             restartTimer = setTimeout(() => void start(), wait * 1000);
         });
     };
@@ -305,12 +305,12 @@ export function setUpRunner(host: RunnerHost) {
         linkTo: (server: string, code: string): Promise<void> =>
             step("Linking this computer…", async () => {
                 if (host.runtime() === undefined) {
-                    busy = "Installing Pi Pocket on this computer for the runner…";
+                    busy = "Installing the runner…";
                     host.changed();
                     await host.prepare();
 
                     if (host.runtime() === undefined) {
-                        throw new Error("Pi Pocket on this computer has no runner yet. Update it under This computer, then try again.");
+                        throw new Error("The runner is not available. Update Pi Pocket under This computer in Connection, then try again.");
                     }
                 }
 

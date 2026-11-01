@@ -45,7 +45,7 @@ test("without a link it is unlinked, and with one but no runtime it says what to
         const state = runner.state();
 
         assert.equal(state.status, "failed");
-        assert.match(state.message ?? "", /no runner/);
+        assert.match(state.message ?? "", /Install or update Pi Pocket under This computer in Connection/);
         assert.deepEqual(state.link, { server: "https://pocket.example", id: "a", name: "Mac" });
         assert.equal(JSON.stringify(state).includes("secret"), false, "the key never leaves the file");
     } finally {
@@ -135,7 +135,7 @@ test("linking installs Pi Pocket first when no runtime has the runner, and says 
     try {
         const runner = setUpRunner(host(home, { prepare: async () => { prepared++; } }));
 
-        await assert.rejects(runner.linkTo("https://pocket.example", "ABCD-EFGH-JKLM"), /no runner yet/);
+        await assert.rejects(runner.linkTo("https://pocket.example", "ABCD-EFGH-JKLM"), /The runner is not available\. Update Pi Pocket/);
         assert.equal(prepared, 1);
         assert.equal(runner.state().busy, undefined);
     } finally {

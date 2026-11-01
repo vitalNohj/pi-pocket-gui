@@ -43,7 +43,7 @@ test("a refused connection is unreachable, in words", async () => {
     const result = await probe("127.0.0.1:8787", refused, 1000);
 
     assert.equal(result.kind, "unreachable");
-    assert.equal(result.kind === "unreachable" && result.message, "Nothing listens at that address and port.");
+    assert.equal(result.kind === "unreachable" && result.message, "No server is listening at that address and port.");
 });
 
 test("a server that never answers times out", async () => {
@@ -78,7 +78,7 @@ test("a JSON API error cannot be opened, even when it redirects", async () => {
 
         assert.equal(result.kind, "other");
         assert.equal(result.kind === "other" && result.canOpen, false);
-        assert.match(result.kind === "other" ? result.message : "", /web interface address, not a model\/API endpoint/);
+        assert.match(result.kind === "other" ? result.message : "", /browser address, not a model API address/);
     }
 });
 
