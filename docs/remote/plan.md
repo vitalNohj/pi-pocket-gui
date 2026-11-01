@@ -1,7 +1,7 @@
 # Remote execution: plan
 
-Status: design, nothing built. Updated 2026-10-31. Against Pi Pocket 0.27.0, Pi Durable / coding-agent 1.4.0, and this
-app 0.1.6 (Electron 45.1.0, Node 24.22.1 built in).
+Status: design, nothing built. Updated 2026-11-01. Checked against Pi Pocket 0.28.0-beta.3 (`release/0.28.0`), Pi
+Durable / coding-agent 1.4.0, and this app 0.2.7 (Electron 45.1.0, Node 24.22.1 built in).
 
 ## The goal
 
@@ -122,6 +122,30 @@ in any shared session. The owner can turn it off at any time. Ownership never mo
 
 **Subagents and linked sessions** started by a remote session execute on the same computer, with the same owner.
 
+## Checked against Pi Pocket 0.28 (2026-11-01)
+
+- **The hook is unchanged.** `Harness.open(storage, { env: ({ conversationId, cwd }) => … })` in `src/server/app.ts`
+  still picks each conversation's execution environment. Today it returns `wrapEnv(NodeExecutionEnv)`, cached by
+  folder (`#env`), and `envFor(id)` gives the same to the rest of the server. A `RemoteExecutionEnv` slots in there.
+- **`ExecutionEnv` (pi-durable 1.4.0) is a `FileSystem` and a `Shell`:** about 25 file calls (read, write, list,
+  watch, temp files, canonical paths) and one `exec`, all async with a `Result`. That is the protocol's core.
+- **Much of the server still touches the disk directly:** `cwdOf(` is used in 42 places, and 61 server files import
+  `node:fs`. Git (`src/server/git.ts`), background tasks (`src/server/background.ts`), the workspace and uploads use
+  the local machine. [research/folders-audit.md](research/folders-audit.md) lists them; it still applies. Phase 5
+  moves them; until then, a remote session's tools run remotely and those panels are off for it.
+- **No WebSocket server yet.** Pi Pocket answers HTTP only; `ws` 8.22 is in its tree, through a dependency, not its own.
+
+## Decisions (2026-11-01)
+
+| Decision | Why |
+|---|---|
+| **The runner is `pi-pocket runner`**, a subcommand of the `pi-pocket` npm package, not a separate package or repo. | One release; the protocol is shared code; the app already installs Pi Pocket. A server gets it with `npm install -g pi-pocket`. |
+| **It connects over a WebSocket,** with `ws` added to Pi Pocket as its own dependency. | Two-way, through Cloudflare and Tailscale; fits large files and live output. No SSH, no tunnel, no open port: the runner dials out. |
+| **Phase 2 reaches end to end:** the runner, the protocol, and a thin server side, so one session runs its tools on another computer. | Proves the design on the real hook before the rest is built. Linking, the owner rule, and the panels follow. |
+| **Upstream gets one issue and PR once remote sessions work end to end,** as with the desktop bridge. | Nothing half-done upstream. Built on the fork's branch and tested on the live instance until then. |
+
+## Problems and solutions
+
 ## Problems and solutions
 
 ★ marks the chosen solution.
@@ -202,7 +226,9 @@ The app itself stays small: Pi Pocket and a Node.js for it are downloaded when f
 
 1. **Pi Pocket on this computer, standalone mode** ([../local-server.md](../local-server.md)): the app downloads Pi
    Pocket and a Node.js for it, keeps them current, starts it, and opens it. New users need no separate install.
-2. **The protocol and the runner** in Pi Pocket, with the request log, tested against a local server.
+2. **The protocol and the runner** in Pi Pocket (`pi-pocket runner`), with the request log, and a thin server side:
+   a WebSocket route, a `RemoteExecutionEnv` from the `env` hook, and one session tied to one runner. Tested end to
+   end against a local server.
 3. **The server side:** runner registry, keys, linking, `RemoteExecutionEnv`, the owner rule.
 4. **Sessions on a computer:** the session keeps its computer; New session offers the computers; offline handling.
 5. **Folders, files, git, project context** through the runner.
