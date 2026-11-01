@@ -359,6 +359,8 @@ function renderLocal(next: ConfigState): void {
     element("local-card").hidden = !isLocal;
     element("remote-card").hidden = isLocal;
     element("get-card").hidden = isLocal;
+    // Only for a server elsewhere: this computer's Pi Pocket is started and watched by the app itself.
+    element("remote-settings-card").hidden = isLocal;
 
     const label = LOCAL_LABELS[local.status];
     const pill = element("local-status");

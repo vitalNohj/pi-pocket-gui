@@ -126,6 +126,8 @@ Use the **web interface address** that opens Pi Pocket in your browser, not a mo
 
 <img src="docs/images/settings.png" alt="The settings screen: the connection on the left, the Window settings on the right" width="100%" />
 
+With **Another server** picked, the **Remote server** card has what the app does with it: open it at start when it answers, and other addresses the window may show (a sign-in page in front of it, such as Cloudflare Access). Its **Advanced** part holds how the app watches the server: a check every 10 seconds while it is open, an outage after 3 failed checks in a row (this screen then says the server is down, and the app keeps trying), retries up to 30 seconds apart, and 4 seconds for each check to answer.
+
 The settings are also a JSON file you can edit by hand. A value that is not valid falls back to its default, and the settings screen lists it.
 
 | | |
