@@ -294,7 +294,7 @@
                     <details class="card" id="runner-card">
                         <summary><h2>This computer as a runner</h2></summary>
                         <div class="rows">
-                            <p class="row-note">A Pi Pocket server can run a session's tools on this computer: its files and commands here, with the agent, its models, and its keys on the server. The app runs the runner for you while it is open. Anyone who can prompt such a session can do here what you can.</p>
+                            <p class="row-note">A Pi Pocket server can run a session's tools on this computer: its files and commands here, with the agent, its models, and its keys on the server. The app runs the runner for you while it is open. Only you can start, see, and prompt sessions on this computer; nobody else on the server can.</p>
                             <div class="row">
                                 <span><strong id="runner-status">Not linked</strong><small id="runner-detail"></small></span>
                                 <span class="buttons">
@@ -318,19 +318,12 @@
                                         </div>
                                     </li>
                                     <li>
-                                        <span>Link it with the code, using the server's address as that computer reaches it:</span>
+                                        <span>Then run this, and answer its questions: the server's address and the code. On Linux it offers to keep running as a service that starts with the computer:</span>
                                         <div class="command">
-                                            <code id="runner-link">pi-pocket runner link https://your-server CODE</code>
-                                            <button type="button" class="ghost small" data-copy="runner-link">Copy</button>
+                                            <code id="runner-serve">pi-pocket runner serve</code>
+                                            <button type="button" class="ghost small" data-copy="runner-serve">Copy</button>
                                         </div>
-                                    </li>
-                                    <li>
-                                        <span>Keep it running. On Linux with systemd, as a service that starts with the computer:</span>
-                                        <div class="command">
-                                            <code id="runner-service">pi-pocket runner service</code>
-                                            <button type="button" class="ghost small" data-copy="runner-service">Copy</button>
-                                        </div>
-                                        <span>Anywhere else, in a terminal that stays open: <code>pi-pocket runner</code>. It connects out to the server, so that computer needs no open port.</span>
+                                        <span>Run it again later: it shows the saved link and asks whether to use it. It connects out to the server, so that computer needs no open port.</span>
                                     </li>
                                 </ol>
                             </details>
