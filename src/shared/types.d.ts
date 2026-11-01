@@ -115,6 +115,10 @@ export interface Settings {
         /** Show the words while a phrase is spoken (recognises it more than once: more CPU). */
         live: boolean;
     };
+    billionContext: {
+        /** Install newer versions of the billion-context-pi adapter in this computer's Pi Pocket without asking. */
+        autoUpdate: boolean;
+    };
 }
 
 /** One speech model, as the settings show it. */
@@ -146,6 +150,40 @@ export interface DictationState {
     models: DictationModelState[];
     downloading: boolean;
 }
+
+/** billion-context-pi in this computer's Pi Pocket (src/main/billion-context.ts). */
+export interface BillionContextState {
+    /** Where Pi Pocket runs: another server (instructions only), or this computer's, not installed, stopped, or running. */
+    server: "remote" | "absent" | "stopped" | "running";
+    /** The adapter in Pi Pocket's drop-in folder. */
+    installed?: {
+        /** billion-context-pi's version. */
+        version: string;
+        /** The adapter's commit, when the app installed it. */
+        commit?: string;
+        /** On in Pi Pocket; unknown while Pi Pocket is not running. */
+        enabled?: boolean;
+        /** Pi Pocket could not load it. */
+        error?: string;
+    };
+    /** The adapter's folder is there, installed outside the app (under another module name). */
+    foreign: boolean;
+    /** The newest commit on the adapter's main branch, once looked up. */
+    latest?: { commit: string; version?: string };
+    checkedAt?: number;
+    updateAvailable: boolean;
+    /** The step under way. */
+    busy?: string;
+    /** What went wrong last. */
+    message?: string;
+    /** Pi Pocket's drop-in folder on this computer. */
+    folder: string;
+    /** The adapter's page, and the command that installs it on another server. */
+    page: string;
+    command: string;
+}
+
+export type BillionContextAction = "install" | "update" | "uninstall" | "check" | "enable" | "disable" | "show-folder" | "open-page";
 
 export interface DictationAction {
     type: "download" | "cancel" | "remove" | "use";
@@ -266,6 +304,7 @@ export interface ConfigState {
     appVersion: string;
     local: LocalState;
     dictation: DictationState;
+    billionContext: BillionContextState;
 }
 
 /** What the config page can ask of this computer's Pi Pocket. */
@@ -378,6 +417,7 @@ export interface GuiConfigApi {
     chooseFolder(start: string): Promise<string | undefined>;
     dictation(action: DictationAction): Promise<void>;
     showDictationFolder(): Promise<void>;
+    billionContext(action: BillionContextAction): Promise<void>;
     /** The main process asks to show a section of the settings, such as "dictation". */
     onFocus(listener: (section: string) => void): () => void;
     onState(listener: (state: ConfigState) => void): () => void;

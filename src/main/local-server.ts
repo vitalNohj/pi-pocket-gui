@@ -950,7 +950,7 @@ export function cause(lines: string[]): string {
 }
 
 /** `~` at the start of a path is the home folder. */
-function expand(path: string): string {
+export function expand(path: string): string {
     return path === "~" ? homedir() : path.startsWith("~/") || path.startsWith("~\\") ? join(homedir(), path.slice(2)) : path;
 }
 

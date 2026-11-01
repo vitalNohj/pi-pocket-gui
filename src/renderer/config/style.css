@@ -770,3 +770,26 @@ button.danger {
     gap: 4px;
     margin-top: 6px;
 }
+
+.row-note a {
+    color: var(--accent);
+}
+
+.rows .steps {
+    padding: 4px 0 12px 20px;
+}
+
+/* A long command scrolls in its own box rather than widening the card. */
+.rows > *,
+.rows .steps li {
+    min-width: 0;
+}
+
+.rows .steps li code {
+    overflow-wrap: anywhere;
+}
+
+.rows .command code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
