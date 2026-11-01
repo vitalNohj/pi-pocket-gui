@@ -149,7 +149,6 @@ Being worked on, none of it in the app yet:
 
 - **Remote execution:** sessions on your server whose files and commands are on this computer.
 - **New session from anywhere:** ⌘N / Ctrl+N, the dock's or taskbar's menu, and a `pi-pocket://new` link.
-- **Offline dictation:** speech to text on this computer, for Pi Pocket's microphone button.
 - **Signed builds** for macOS and Windows, so updates install themselves everywhere.
 
 ## Develop
