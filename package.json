@@ -1,7 +1,7 @@
 {
     "name": "pi-pocket-gui",
     "productName": "Pi Pocket",
-    "version": "0.2.7",
+    "version": "0.2.8",
     "description": "Desktop app for a Pi Pocket server: tray, badge, native notifications, and offline dictation.",
     "license": "MIT",
     "author": "vitalNohj",
