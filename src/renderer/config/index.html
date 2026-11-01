@@ -291,6 +291,56 @@
                         </div>
                     </details>
 
+                    <details class="card" id="runner-card">
+                        <summary><h2>This computer as a runner</h2></summary>
+                        <div class="rows">
+                            <p class="row-note">A Pi Pocket server can run a session's tools on this computer: its files and commands here, with the agent, its models, and its keys on the server. The app runs the runner for you while it is open. Anyone who can prompt such a session can do here what you can.</p>
+                            <div class="row">
+                                <span><strong id="runner-status">Not linked</strong><small id="runner-detail"></small></span>
+                                <span class="buttons">
+                                    <button type="button" class="secondary" id="runner-restart">Reconnect</button>
+                                    <button type="button" class="secondary danger" id="runner-unlink">Unlink</button>
+                                </span>
+                            </div>
+                            <label class="row" id="runner-enabled-row"><span><strong>Run the runner</strong><small>While the app runs, also hidden in the tray. Off: the server shows this computer as offline.</small></span><input type="checkbox" data-key="runner.enabled" /></label>
+                            <div id="runner-how">
+                                <p class="row-note">To link this computer: open the server in this app, then <strong>Menu → Computers → Link a computer → Link this computer</strong>. It takes one click; the app installs what the runner needs.</p>
+                            </div>
+                            <details class="advanced" id="runner-elsewhere">
+                                <summary>Another computer, such as a server</summary>
+                                <ol class="steps">
+                                    <li><span>In Pi Pocket, open <strong>Menu → Computers → Link a computer</strong>, name it, and choose <strong>Link another computer</strong> (or <strong>Make a link code</strong> in a browser). It shows a one-time code, good for 10 minutes.</span></li>
+                                    <li>
+                                        <span>On that computer, with Node.js 22.19 or newer, install Pi Pocket:</span>
+                                        <div class="command">
+                                            <code id="runner-install">npm install -g https://codeload.github.com/vitalNohj/pi-pocket/tar.gz/live-0.28</code>
+                                            <button type="button" class="ghost small" data-copy="runner-install">Copy</button>
+                                        </div>
+                                    </li>
+                                    <li>
+                                        <span>Link it with the code, using the server's address as that computer reaches it:</span>
+                                        <div class="command">
+                                            <code id="runner-link">pi-pocket runner link https://your-server CODE</code>
+                                            <button type="button" class="ghost small" data-copy="runner-link">Copy</button>
+                                        </div>
+                                    </li>
+                                    <li>
+                                        <span>Keep it running. On Linux with systemd, as a service that starts with the computer:</span>
+                                        <div class="command">
+                                            <code id="runner-service">pi-pocket runner service</code>
+                                            <button type="button" class="ghost small" data-copy="runner-service">Copy</button>
+                                        </div>
+                                        <span>Anywhere else, in a terminal that stays open: <code>pi-pocket runner</code>. It connects out to the server, so that computer needs no open port.</span>
+                                    </li>
+                                </ol>
+                            </details>
+                            <details class="log" id="runner-log-box" hidden>
+                                <summary>Runner log</summary>
+                                <pre id="runner-log"></pre>
+                            </details>
+                        </div>
+                    </details>
+
                     <details class="card">
                         <summary><h2>Notifications</h2></summary>
                         <div class="rows">

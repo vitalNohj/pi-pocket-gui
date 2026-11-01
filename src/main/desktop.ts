@@ -58,6 +58,10 @@ export interface DesktopHost {
     dictation: () => boolean;
     /** A right-click the page left alone, as its preload saw it (src/main/themed-menu.ts reads it). */
     pageRightClick: (click: unknown) => void;
+    /** This computer's name, for "Link this computer". */
+    computerName: () => string;
+    /** Link this computer as a runner to this server, with a one-time code its page made, and run the runner. */
+    linkRunner: (server: string, code: string) => Promise<void>;
 }
 
 function originOf(url: string): string | undefined {
@@ -305,9 +309,32 @@ export function setUpDesktop(host: DesktopHost): {
     ipcMain.on("host:hello", (event) => {
         // Only the server view's top frame on the server's origin gets the bridge: never a frame, another window, or a
         // sign-in page in front of the server.
-        const hello: HostHello | null = fromServerPage(event) ? { visible: visible(), dictation: host.dictation() } : null;
+        const hello: HostHello | null = fromServerPage(event)
+            ? { visible: visible(), dictation: host.dictation(), computerName: host.computerName() }
+            : null;
 
         event.returnValue = hello;
+    });
+
+    // "Link this computer": the code the page just made links this computer to the page's own server, never another.
+    ipcMain.handle("host:link-runner", async (event, request: unknown): Promise<{ ok: boolean; error?: string }> => {
+        if (!fromServerPage(event)) {
+            return { ok: false, error: "Not allowed" };
+        }
+
+        const code = typeof request === "object" && request !== null ? (request as { code?: unknown }).code : undefined;
+
+        if (typeof code !== "string" || !/^[A-Za-z0-9-]{4,64}$/.test(code)) {
+            return { ok: false, error: "That is not a link code." };
+        }
+
+        try {
+            await host.linkRunner(host.origin(), code);
+
+            return { ok: true };
+        } catch (error) {
+            return { ok: false, error: (error as Error).message };
+        }
     });
 
     ipcMain.on("host:invoke", (event, id: unknown) => {

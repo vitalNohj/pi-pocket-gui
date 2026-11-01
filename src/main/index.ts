@@ -49,6 +49,7 @@ import { loadTheme, sameTheme, saveTheme } from "./theme";
 import { setUpDesktop } from "./desktop";
 import { setUpDictation } from "./dictation";
 import { ADAPTER, ADAPTER_PAGE, setUpBillionContext } from "./billion-context";
+import { computerName, setUpRunner } from "./runner";
 import { setUpLocalServer } from "./local-server";
 import { setUpUpdates } from "./updates";
 import { setLaunchAtLogin, startedAtLogin, trayAvailable } from "./platform";
@@ -131,6 +132,8 @@ interface Gui {
     dictation: ReturnType<typeof setUpDictation> | undefined;
     /** billion-context-pi in this computer's Pi Pocket (src/main/billion-context.ts). */
     billionContext: ReturnType<typeof setUpBillionContext> | undefined;
+    /** This computer as a runner for a server (src/main/runner.ts). */
+    runner: ReturnType<typeof setUpRunner> | undefined;
     /** The login link was opened: the next page drops it from the view's history. */
     signingIn: boolean;
 }
@@ -239,6 +242,7 @@ async function start(): Promise<void> {
         local: undefined,
         dictation: undefined,
         billionContext: undefined,
+        runner: undefined,
         signingIn: false,
     };
 
@@ -324,6 +328,7 @@ async function start(): Promise<void> {
         changed: () => {
             pushConfigState();
             gui?.desktop?.refreshTray();
+            gui?.runner?.runtimeChanged();
         },
         ready: (url, loginPath) => {
             gui?.billionContext?.serverReady();
@@ -347,6 +352,35 @@ async function start(): Promise<void> {
         },
         fetch: (url, headers = {}) => net.fetch(url, { headers: { "user-agent": `pi-pocket-gui/${app.getVersion()}`, ...headers } }),
         request: (url, init) => net.fetch(url, init),
+        changed: () => {
+            pushConfigState();
+        },
+    });
+
+    gui.runner = setUpRunner({
+        home: join(app.getPath("userData"), "runner"),
+        platform: process.platform,
+        enabled: () => gui!.settings.runner.enabled,
+        setEnabled: async (enabled) => {
+            const state = gui!;
+
+            if (state.settings.runner.enabled !== enabled) {
+                state.settings = { ...state.settings, runner: { enabled } };
+                saveSettings(state.configPath, state.settings);
+            }
+        },
+        runtime: () => gui!.local!.runnerRuntime(),
+        // No Pi Pocket here yet: install it (it starts only in "This computer" mode). One without the runner: update it.
+        prepare: async () => {
+            const local = gui!.local!;
+
+            if (!local.installed()) {
+                await local.install();
+            } else {
+                await local.checkUpdates();
+            }
+        },
+        environment: () => gui!.local!.environment(),
         changed: () => {
             pushConfigState();
         },
@@ -379,6 +413,8 @@ async function start(): Promise<void> {
         updateItem: () => gui?.updates?.trayItem() ?? gui?.local?.trayItem(),
         theme: () => gui!.theme,
         dictation: () => gui?.dictation?.state().supported === true,
+        computerName: () => computerName(),
+        linkRunner: (server, code) => gui!.runner!.linkTo(server, code),
         themeChanged: (next) => {
             const state = gui!;
 
@@ -481,7 +517,7 @@ async function start(): Promise<void> {
         if (!stopped && gui?.local !== undefined) {
             event.preventDefault();
             stopped = true;
-            void gui.local.quit().finally(() => app.quit());
+            void Promise.allSettled([gui.local.quit(), gui.runner?.quit()]).finally(() => app.quit());
         }
     });
     app.on("activate", () => {
@@ -511,6 +547,14 @@ async function start(): Promise<void> {
 
     if (!hidden) {
         window.show();
+    }
+
+    // This computer as a runner, for whichever server it is linked to.
+    gui.runner!.boot();
+
+    // Its runner comes from Pi Pocket on this computer: keep that current also while another server is in use.
+    if (gui.settings.server.mode !== "local" && gui.runner!.linked()) {
+        gui.local!.keepCurrent();
     }
 
     // This computer's Pi Pocket: the window opens it once it is ready, and shows its state until then.
@@ -819,6 +863,7 @@ function configState(): ConfigState {
         local: state.local!.state(),
         dictation: state.dictation!.state(),
         billionContext: state.billionContext!.state(),
+        runner: state.runner!.state(),
     };
 }
 
@@ -1484,6 +1529,10 @@ function registerIpc(): void {
         state.local?.rescheduleUpdates();
         state.billionContext?.reschedule();
 
+        if (before.runner.enabled !== state.settings.runner.enabled) {
+            state.runner?.enabledChanged();
+        }
+
         if (!sameAddress(before.server.url, state.settings.server.url)) {
             state.probe = undefined;
         }
@@ -1583,6 +1632,34 @@ function registerIpc(): void {
         }
 
         return localAction(action as LocalAction);
+    });
+
+    handle("config:runner", async (_event, action) => {
+        const runner = gui!.runner!;
+
+        switch (action) {
+            case "unlink": {
+                const link = runner.link();
+                const answer = await dialog.showMessageBox(gui!.window, {
+                    type: "question",
+                    buttons: ["Unlink", "Cancel"],
+                    defaultId: 1,
+                    cancelId: 1,
+                    message: "Unlink this computer?",
+                    detail: `The runner stops, and ${link?.server ?? "the server"} can no longer run sessions' tools here. Remove "${link?.name ?? "this computer"}" under Menu → Computers there too.`,
+                });
+
+                if (answer.response === 0) {
+                    await runner.unlink();
+                }
+
+                return;
+            }
+            case "restart":
+                return runner.restart();
+            default:
+                throw new Error("Unknown runner action");
+        }
     });
 
     handle("config:billion-context", (_event, action) => {

@@ -1,5 +1,5 @@
 /** The config screen: the connection on top, how to get a server below it, then the settings. */
-import type { BillionContextAction, ConfigReason, ConfigState, DictationModelState, GuiConfigApi, LocalAction, LocalState, ProbeResult, Settings } from "../../shared/types";
+import type { BillionContextAction, ConfigReason, ConfigState, DictationModelState, GuiConfigApi, LocalAction, LocalState, ProbeResult, RunnerState, Settings } from "../../shared/types";
 
 declare global {
     interface Window {
@@ -488,6 +488,7 @@ function render(next: ConfigState): void {
     renderLocal(next);
     renderDictation(next);
     renderBillionContext(next);
+    renderRunner(next);
     element("app-version").textContent = next.appVersion;
     renderUpdate(next);
     element("config-path").textContent = next.configPath;
@@ -1066,6 +1067,63 @@ for (const [id, action] of [
 element("bc-page").addEventListener("click", (event) => {
     event.preventDefault();
     billionContextAction("open-page");
+});
+
+// ——— This computer as a runner ———
+
+const RUNNER_STATUS: Record<RunnerState["status"], string> = {
+    unlinked: "Not linked",
+    off: "Linked, turned off",
+    connecting: "Connecting…",
+    connected: "Connected",
+    failed: "Stopped",
+    ended: "The server ended the link",
+    stopping: "Stopping…",
+};
+
+function renderRunner(next: ConfigState): void {
+    const runner = next.runner;
+    const link = runner.link;
+    const busy = runner.busy !== undefined;
+    let detail: string;
+
+    if (link === undefined) {
+        detail = "No server can run tools here yet.";
+    } else if (runner.status === "connected") {
+        detail = `As "${link.name}" for ${link.server}: its sessions on this computer can run.`;
+    } else {
+        detail = `As "${link.name}" for ${link.server}.${runner.message === undefined ? "" : ` ${runner.message}`}`;
+    }
+
+    element("runner-status").textContent = runner.busy ?? RUNNER_STATUS[runner.status] ?? "";
+    element("runner-detail").textContent = detail;
+    element("runner-how").hidden = link !== undefined && runner.status !== "ended";
+    element("runner-enabled-row").classList.toggle("off", link === undefined);
+
+    const restart = element<HTMLButtonElement>("runner-restart");
+    const unlink = element<HTMLButtonElement>("runner-unlink");
+
+    restart.hidden = link === undefined || !runner.enabled || runner.status === "connected";
+    restart.disabled = busy;
+    unlink.hidden = link === undefined;
+    unlink.disabled = busy;
+
+    // The address of the server the app shows, as the command to link another computer to it.
+    const server = link?.server ?? next.connectedUrl;
+
+    if (server !== undefined) {
+        element("runner-link").textContent = `pi-pocket runner link ${new URL(server).origin} CODE`;
+    }
+
+    element("runner-log-box").hidden = runner.log.length === 0;
+    element("runner-log").textContent = runner.log.join("\n");
+}
+
+element("runner-restart").addEventListener("click", () => {
+    gui.runner("restart").catch(() => {});
+});
+element("runner-unlink").addEventListener("click", () => {
+    gui.runner("unlink").catch(() => {});
 });
 
 // ——— Start ———

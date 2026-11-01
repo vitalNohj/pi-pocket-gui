@@ -30,6 +30,8 @@ const REGISTRY = "https://registry.npmjs.org/pi-pocket/latest";
  */
 const SOURCE: "fork" | "npm" = "fork";
 const FORK = { repo: "vitalNohj/pi-pocket", branch: "live-0.28" };
+/** The fork's branch as an npm install spec, for another computer's runner. */
+export const FORK_PACKAGE = `https://codeload.github.com/${FORK.repo}/tar.gz/${FORK.branch}`;
 const NODE_INDEX = "https://nodejs.org/dist/index.json";
 /** Pi Pocket's exit code for a problem in how it was started (a port in use, a held data folder): retrying won't help. */
 const CONFIG_ERROR = 78;
@@ -301,6 +303,9 @@ export function setUpLocalServer(host: LocalHost) {
                     "--no-audit",
                     "--no-fund",
                     "--loglevel=error",
+                    // A download that stalls fails and is tried again, rather than hanging the install.
+                    "--fetch-timeout=60000",
+                    "--fetch-retries=3",
                     versions.build.spec,
                 ],
                 {
@@ -694,6 +699,8 @@ export function setUpLocalServer(host: LocalHost) {
                 PATH: `${env.PATH ?? ""}${separator}${where.bin}`,
                 NO_COLOR: "1",
                 PI_POCKET_DESKTOP_APP: "1",
+                // What Computers tells another computer to install for its runner: this same Pi Pocket.
+                ...(SOURCE === "fork" ? { PI_POCKET_RUNNER_PACKAGE: FORK_PACKAGE } : {}),
             },
             stdio: ["ignore", "pipe", "pipe"],
             windowsHide: true,
@@ -855,6 +862,30 @@ export function setUpLocalServer(host: LocalHost) {
             };
         },
         installed: () => usable(readCurrent().current),
+        /**
+         * The runtime to run `pi-pocket runner` from (src/main/runner.ts): the current one, or the one an update built
+         * for the next start, whichever has the runner. Undefined when neither has.
+         */
+        runnerRuntime: (): { node: string; launcher: string; bin: string } | undefined => {
+            const current = readCurrent();
+
+            for (const runtime of [current.current, current.next]) {
+                if (usable(runtime) && existsSync(join(paths(runtime).pocket, "src", "runner", "main.ts"))) {
+                    const where = paths(runtime);
+
+                    return { node: where.node, launcher: where.launcher, bin: where.bin };
+                }
+            }
+
+            return undefined;
+        },
+        /** The person's own environment, as a terminal has it, for what the app starts. */
+        environment: loginEnvironment,
+        /** Look for newer versions now and then, also while another server is in use (the runner runs from it). */
+        keepCurrent: (): void => {
+            void checkUpdates(false);
+            scheduleUpdates();
+        },
         /** Pi Pocket's data folder: the running one's while it runs, else the one the settings name for its next start. */
         dataFolder: (): string => runningData ?? dataFolderOf(host.settings().local, defaults().data),
         url: () => url,
