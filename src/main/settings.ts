@@ -40,6 +40,7 @@ export function defaultSettings(): Settings {
         local: { folder: "", port: 8787, access: "local", data: "", keepUpdated: true },
         appearance: { translucent: false, opacity: 82, macMaterial: "under-window", windowsMaterial: "acrylic", trayMenu: "windows" },
         dictation: { model: "", live: true },
+        billionContext: { autoUpdate: false },
     };
 }
 
@@ -168,6 +169,7 @@ const schema: { [S in keyof Settings]: { [K in keyof Settings[S]]: Check<Setting
         model: (value) => (value === "" || (typeof value === "string" && modelById(value) !== undefined) ? pass(value) : fail("must be a speech model's id")),
         live: bool,
     },
+    billionContext: { autoUpdate: bool },
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {

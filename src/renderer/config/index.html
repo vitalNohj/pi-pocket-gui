@@ -251,6 +251,46 @@
                         </div>
                     </details>
 
+                    <details class="card" id="billion-context-card">
+                        <summary><h2>Billion-context Pi</h2></summary>
+                        <div class="rows">
+                            <p class="row-note">Context compression for Pi Pocket's agent: it folds finished parts of a long conversation into short summaries and can open them again, so a conversation goes on far past the model's context window. A Pi Pocket extension, from <a href="#" id="bc-page">billion-context-pi-pocket-adapter</a>.</p>
+                            <p class="row-note error" id="bc-message" hidden></p>
+                            <div id="bc-local">
+                                <div class="row">
+                                    <span><strong id="bc-status">Not installed</strong><small id="bc-detail"></small></span>
+                                    <span class="buttons">
+                                        <button type="button" id="bc-install">Install</button>
+                                        <button type="button" id="bc-update">Update</button>
+                                        <button type="button" class="secondary" id="bc-enable">Turn on</button>
+                                        <button type="button" class="secondary" id="bc-disable">Turn off</button>
+                                        <button type="button" class="secondary" id="bc-check">Check now</button>
+                                        <button type="button" class="secondary danger" id="bc-uninstall">Uninstall</button>
+                                    </span>
+                                </div>
+                                <label class="row" id="bc-auto-row"><span><strong>Update automatically</strong><small>Installs a newer version when one comes out, as often as the app looks for its own updates. Otherwise Update shows here.</small></span><input type="checkbox" data-key="billionContext.autoUpdate" /></label>
+                                <div class="row">
+                                    <span><strong>Where it is installed</strong><small id="bc-folder"></small></span>
+                                    <button type="button" class="secondary" id="bc-show-folder">Show</button>
+                                </div>
+                            </div>
+                            <div id="bc-remote" hidden>
+                                <p class="row-note">The app installs it in the Pi Pocket it runs on this computer. To add it to another server:</p>
+                                <ol class="steps">
+                                    <li>
+                                        <span>On the server (Linux or macOS), put its files in Pi Pocket's extensions folder. The same command updates it:</span>
+                                        <div class="command">
+                                            <code id="bc-command"></code>
+                                            <button type="button" class="ghost small" data-copy="bc-command">Copy</button>
+                                        </div>
+                                    </li>
+                                    <li><span>If Pi Pocket keeps its data somewhere other than <code>~/.pi-pocket</code>, change the path in the command. On Windows, download the repository and copy <code>billion-context-pi-pocket-adapter.ts</code> and the <code>billion-context-pi-pocket-adapter</code> folder there.</span></li>
+                                    <li><span>In Pi Pocket, open <strong>Menu → Extensions</strong> and turn on <strong>billion-context-pi-pocket-adapter</strong>. To update, turn it off first, run the command, and turn it on again.</span></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </details>
+
                     <details class="card">
                         <summary><h2>Notifications</h2></summary>
                         <div class="rows">

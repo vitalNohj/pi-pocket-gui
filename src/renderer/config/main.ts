@@ -1,5 +1,5 @@
 /** The config screen: the connection on top, how to get a server below it, then the settings. */
-import type { ConfigReason, ConfigState, DictationModelState, GuiConfigApi, LocalAction, LocalState, ProbeResult, Settings } from "../../shared/types";
+import type { BillionContextAction, ConfigReason, ConfigState, DictationModelState, GuiConfigApi, LocalAction, LocalState, ProbeResult, Settings } from "../../shared/types";
 
 declare global {
     interface Window {
@@ -485,6 +485,7 @@ function render(next: ConfigState): void {
     element("settings-shortcut").textContent = `Return to Server settings any time with ${next.platform === "darwin" ? "⌘," : "Ctrl+,"}, the tray menu, or a right-click on the page.`;
     renderLocal(next);
     renderDictation(next);
+    renderBillionContext(next);
     element("app-version").textContent = next.appVersion;
     renderUpdate(next);
     element("config-path").textContent = next.configPath;
@@ -973,6 +974,96 @@ gui.onFocus((section) => {
         card.open = true;
         card.scrollIntoView({ behavior: "smooth", block: "start" });
     }
+});
+
+// ——— Billion-context Pi ———
+
+function billionContextAction(action: BillionContextAction): void {
+    gui.billionContext(action).catch(() => {
+        // The error shows in the card, through the state.
+    });
+}
+
+function renderBillionContext(next: ConfigState): void {
+    const extension = next.billionContext;
+    const remote = extension.server === "remote";
+    const installed = extension.installed;
+    const busy = extension.busy !== undefined;
+    const running = extension.server === "running";
+    const message = element("bc-message");
+    const shown = (id: string, visible: boolean): void => {
+        const button = element<HTMLButtonElement>(id);
+
+        button.hidden = !visible;
+        button.disabled = busy;
+    };
+
+    element("bc-local").hidden = remote;
+    element("bc-remote").hidden = !remote;
+    element("bc-command").textContent = extension.command;
+    element("bc-folder").textContent = extension.folder;
+    message.hidden = extension.message === undefined;
+    message.textContent = extension.message ?? "";
+
+    const latest = extension.latest?.version === undefined ? "" : ` ${extension.latest.version}`;
+    const checked = extension.checkedAt === undefined ? "" : ` Checked ${new Date(extension.checkedAt).toLocaleString()}.`;
+    let status: string;
+    let detail: string;
+
+    if (installed === undefined) {
+        status = extension.foreign ? "Installed outside the app" : "Not installed";
+        detail = extension.foreign
+            ? "Its folder is in Pi Pocket's extensions folder under another name. Manage it in Pi Pocket's Menu → Extensions, or remove that copy to let the app install it."
+            : extension.server === "absent"
+              ? "Install Pi Pocket on this computer first (above)."
+              : extension.server === "stopped"
+                ? "Start Pi Pocket first: the app turns the extension on through it."
+                : "Install downloads it from GitHub (about 1 MB, 4 MB on disk) and turns it on.";
+    } else {
+        const state = installed.error !== undefined ? "failed to load" : installed.enabled === true ? "on" : installed.enabled === false ? "off" : "";
+
+        status = `billion-context-pi ${installed.version}${state === "" ? "" : `, ${state}`}`;
+        detail = installed.error ?? (
+            installed.commit === undefined
+                ? "Installed outside the app: it does not update it."
+                : extension.updateAvailable
+                  ? `A newer version${latest} is out.${checked}`
+                  : extension.checkedAt === undefined
+                    ? ""
+                    : `Up to date.${checked}`
+        );
+
+        if (!running) {
+            detail = `${detail} Start Pi Pocket to turn it on or off.`.trim();
+        }
+    }
+
+    element("bc-status").textContent = extension.busy ?? status;
+    element("bc-detail").textContent = detail;
+    shown("bc-install", installed === undefined && !extension.foreign && running);
+    shown("bc-update", installed?.commit !== undefined && extension.updateAvailable && running);
+    shown("bc-enable", installed !== undefined && installed.enabled === false && running);
+    shown("bc-disable", installed !== undefined && installed.enabled === true && running);
+    shown("bc-check", installed?.commit !== undefined);
+    shown("bc-uninstall", installed !== undefined);
+    element("bc-auto-row").classList.toggle("off", installed?.commit === undefined);
+}
+
+for (const [id, action] of [
+    ["bc-install", "install"],
+    ["bc-update", "update"],
+    ["bc-enable", "enable"],
+    ["bc-disable", "disable"],
+    ["bc-check", "check"],
+    ["bc-uninstall", "uninstall"],
+    ["bc-show-folder", "show-folder"],
+] as const) {
+    element(id).addEventListener("click", () => billionContextAction(action));
+}
+
+element("bc-page").addEventListener("click", (event) => {
+    event.preventDefault();
+    billionContextAction("open-page");
 });
 
 // ——— Start ———

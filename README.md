@@ -104,6 +104,17 @@ Pi Pocket's mic button (and Alt+V) works in the app, recognised on your computer
 
 Words show while you speak and are corrected when you pause (**Words as you speak**; turn it off to save CPU). A model loads at the first dictation and leaves memory after 10 idle minutes. The mic needs Pi Pocket on `127.0.0.1`/`localhost` or `https`: browsers, and so the app, keep the microphone from plain-http pages on other addresses.
 
+### Billion-context Pi
+
+The **Billion-context Pi** card installs [billion-context-pi-pocket-adapter](https://github.com/vitalNohj/billion-context-pi-pocket-adapter) (context compression for long conversations) in the Pi Pocket the app runs on this computer, and turns it on. Pi Pocket must be running.
+
+- **Install** downloads the newest commit of the adapter's `main` branch from GitHub, checks each file against the git hash the commit lists, and puts `billion-context-pi-pocket-adapter.ts` and its folder in Pi Pocket's `extensions` folder. Then it turns the extension on through Pi Pocket's API.
+- **Update** shows when a newer commit is out, at each start and as often as the app looks for its own updates. It turns the extension off, swaps the files, and turns it on again. **Update automatically** does this without asking (off by default).
+- **Uninstall** turns it off and removes those files. Its settings file (`billion-context-pi-pocket-adapter.json`) and its saved state stay.
+- A copy installed by hand under another file name is left alone: the card says so.
+
+With **Another server**, the card shows the command that installs it on that server instead.
+
 ### Settings
 
 Everything is on one screen: **Server settings…** in the File menu, the tray, Pi Pocket's own menu, a right-click on the page, or Ctrl+, (⌘, on macOS). The shortcut belongs to the desktop app and works even on a broken server page. The badge says **Connected** once Pi Pocket is open; **Connect** waits until you change the address and check the new one.

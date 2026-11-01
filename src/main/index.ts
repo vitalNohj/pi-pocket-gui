@@ -26,7 +26,7 @@ import {
     type MenuItemConstructorOptions,
     type WebContents,
 } from "electron";
-import type { ConfigReason, ConfigState, DictationAction, LocalAction, ProbeResult, Settings, SettingsProblem, ThemeColors, TitleBarStyle } from "../shared/types";
+import type { BillionContextAction, ConfigReason, ConfigState, DictationAction, LocalAction, ProbeResult, Settings, SettingsProblem, ThemeColors, TitleBarStyle } from "../shared/types";
 import { retryDelayMs } from "./backoff";
 import { mayConnect, NavigationResponses } from "./connection";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
@@ -48,6 +48,7 @@ import { parseAppsUseLightTheme, setUpTitleBar, titleBarOptions } from "./titleb
 import { loadTheme, sameTheme, saveTheme } from "./theme";
 import { setUpDesktop } from "./desktop";
 import { setUpDictation } from "./dictation";
+import { ADAPTER, ADAPTER_PAGE, setUpBillionContext } from "./billion-context";
 import { setUpLocalServer } from "./local-server";
 import { setUpUpdates } from "./updates";
 import { setLaunchAtLogin, startedAtLogin, trayAvailable } from "./platform";
@@ -128,6 +129,8 @@ interface Gui {
     local: ReturnType<typeof setUpLocalServer> | undefined;
     /** Offline dictation (src/main/dictation.ts). */
     dictation: ReturnType<typeof setUpDictation> | undefined;
+    /** billion-context-pi in this computer's Pi Pocket (src/main/billion-context.ts). */
+    billionContext: ReturnType<typeof setUpBillionContext> | undefined;
     /** The login link was opened: the next page drops it from the view's history. */
     signingIn: boolean;
 }
@@ -235,6 +238,7 @@ async function start(): Promise<void> {
         toldNoBridge: false,
         local: undefined,
         dictation: undefined,
+        billionContext: undefined,
         signingIn: false,
     };
 
@@ -321,8 +325,31 @@ async function start(): Promise<void> {
             pushConfigState();
             gui?.desktop?.refreshTray();
         },
-        ready: (url, loginPath) => openLocal(url, loginPath),
-        down: () => localDown(),
+        ready: (url, loginPath) => {
+            gui?.billionContext?.serverReady();
+            openLocal(url, loginPath);
+        },
+        down: () => {
+            gui?.billionContext?.serverDown();
+            localDown();
+        },
+    });
+
+    gui.billionContext = setUpBillionContext({
+        home: join(app.getPath("userData"), "billion-context"),
+        platform: process.platform,
+        settings: () => gui!.settings,
+        dataFolder: () => gui!.local!.dataFolder(),
+        local: () => {
+            const local = gui!.local!;
+
+            return { installed: local.installed(), url: local.state().status === "running" ? local.url() : undefined };
+        },
+        fetch: (url, headers = {}) => net.fetch(url, { headers: { "user-agent": `pi-pocket-gui/${app.getVersion()}`, ...headers } }),
+        request: (url, init) => net.fetch(url, init),
+        changed: () => {
+            pushConfigState();
+        },
     });
 
     gui.desktop = setUpDesktop({
@@ -468,6 +495,7 @@ async function start(): Promise<void> {
     app.on("will-quit", () => {
         globalShortcut.unregisterAll();
         gui?.dictation?.quit();
+        gui?.billionContext?.quit();
     });
 
     registerIpc();
@@ -660,6 +688,51 @@ async function localAction(action: LocalAction): Promise<void> {
     }
 }
 
+async function billionContextAction(action: BillionContextAction): Promise<void> {
+    const state = gui!;
+    const extension = state.billionContext!;
+
+    switch (action) {
+        case "install":
+            await extension.install();
+            break;
+        case "update":
+            await extension.update();
+            break;
+        case "check":
+            await extension.check();
+            break;
+        case "enable":
+            await extension.enable();
+            break;
+        case "disable":
+            await extension.disable();
+            break;
+        case "show-folder":
+            shell.showItemInFolder(join(extension.state().folder, ADAPTER.file));
+            break;
+        case "open-page":
+            void shell.openExternal(ADAPTER_PAGE);
+            break;
+        case "uninstall": {
+            const { response } = await dialog.showMessageBox(state.window, {
+                type: "warning",
+                message: "Remove billion-context-pi from this computer's Pi Pocket?",
+                detail: `This turns it off and removes its files from ${extension.state().folder}.\n\nIts settings file and its saved compression state stay. Install puts it back.`,
+                buttons: ["Remove", "Cancel"],
+                defaultId: 1,
+                cancelId: 1,
+            });
+
+            if (response === 0) {
+                await extension.uninstall();
+            }
+
+            break;
+        }
+    }
+}
+
 function layout(): void {
     if (gui === undefined) {
         return;
@@ -745,6 +818,7 @@ function configState(): ConfigState {
         update: state.updates?.state() ?? { method: "source", status: "idle" },
         local: state.local!.state(),
         dictation: state.dictation!.state(),
+        billionContext: state.billionContext!.state(),
     };
 }
 
@@ -1408,6 +1482,7 @@ function registerIpc(): void {
         state.dictation?.settingsChanged();
         state.updates?.reschedule();
         state.local?.rescheduleUpdates();
+        state.billionContext?.reschedule();
 
         if (!sameAddress(before.server.url, state.settings.server.url)) {
             state.probe = undefined;
@@ -1508,6 +1583,16 @@ function registerIpc(): void {
         }
 
         return localAction(action as LocalAction);
+    });
+
+    handle("config:billion-context", (_event, action) => {
+        const actions: BillionContextAction[] = ["install", "update", "uninstall", "check", "enable", "disable", "show-folder", "open-page"];
+
+        if (typeof action !== "string" || !(actions as string[]).includes(action)) {
+            throw new Error("Not an action");
+        }
+
+        return billionContextAction(action as BillionContextAction);
     });
 
     handle("config:dictation", (_event, action) => {
