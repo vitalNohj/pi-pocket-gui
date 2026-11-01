@@ -143,8 +143,33 @@ in any shared session. The owner can turn it off at any time. Ownership never mo
 | **It connects over a WebSocket,** with `ws` added to Pi Pocket as its own dependency. | Two-way, through Cloudflare and Tailscale; fits large files and live output. No SSH, no tunnel, no open port: the runner dials out. |
 | **Phase 2 reaches end to end:** the runner, the protocol, and a thin server side, so one session runs its tools on another computer. | Proves the design on the real hook before the rest is built. Linking, the owner rule, and the panels follow. |
 | **Upstream gets one issue and PR once remote sessions work end to end,** as with the desktop bridge. | Nothing half-done upstream. Built on the fork's branch and tested on the live instance until then. |
+| **The engine is Earendil's `@earendil-works/pi-env`** (MIT, same version line as Pi Durable): its `RemoteExecutionEnv` on the server, its Rust daemon on the computer. `pi-pocket runner` connects out over the WebSocket and relays pi-env frames to a local daemon. No own file or command protocol. | pi-env already does exactly this, for Linux, macOS, Windows, and Android, with results checked to match `NodeExecutionEnv`, and Earendil maintains it. Our part shrinks to the link, keys, and policy. |
+| **Short drops are survived; a server restart is like today.** | See below. |
 
-## Problems and solutions
+### Drops (decided 2026-11-01)
+
+Pi Durable keeps the session, its history, the run, and the queue on the server, whatever happens to the link. A drop
+can only lose the one command running at that moment.
+
+| Event | Result |
+|---|---|
+| Short drop (Wi-Fi blip, network change, tunnel reconnect), back within the grace period (2 minutes) | Nothing is lost. The command keeps running on the computer; its output waits; the server's request waits instead of failing. On reconnect, the output flows and the command finishes normally. |
+| The link stays down longer than the grace period | The computer stops what it was running; the call fails as "connection lost"; Pi sees it and can retry. The session waits for the computer. |
+| The main server restarts | The running command ends and the call comes back `interrupted`, exactly as for a local session today. Pi Durable carries on. |
+| The computer sleeps, or the app quits | As a long drop. |
+
+How:
+
+- **The runner keeps the daemon alive while the link is down:** it pings the daemon itself (pi-env stops everything
+  after 30 s without bytes) and stops reading the daemon's output, so the daemon pauses its commands' output as a full
+  pipe would (pi-env holds at most 4 MiB). Memory stays bounded.
+- **The link is resumable:** both sides number their messages and acknowledge them. On reconnect, each says what it
+  last received, and the other sends the rest again. No byte between the server and the daemon is lost or repeated.
+- **The server keeps the daemon session open** for the grace period, so handles (open files, watches, running
+  commands) stay valid. A runner that comes back with a new daemon, or after the grace period, starts a new session:
+  requests still waiting then fail as lost.
+- **Later (problem 1 below):** a request log on the runner that a restarted server can read, so a server restart
+  loses nothing either. It can be added without changing the rest.
 
 ## Problems and solutions
 
