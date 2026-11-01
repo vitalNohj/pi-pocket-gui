@@ -49,7 +49,7 @@ import { loadTheme, sameTheme, saveTheme } from "./theme";
 import { setUpDesktop } from "./desktop";
 import { setUpDictation } from "./dictation";
 import { ADAPTER, ADAPTER_PAGE, setUpBillionContext } from "./billion-context";
-import { expand, setUpLocalServer } from "./local-server";
+import { setUpLocalServer } from "./local-server";
 import { setUpUpdates } from "./updates";
 import { setLaunchAtLogin, startedAtLogin, trayAvailable } from "./platform";
 import { networkMessage, probe } from "./probe";
@@ -339,7 +339,7 @@ async function start(): Promise<void> {
         home: join(app.getPath("userData"), "billion-context"),
         platform: process.platform,
         settings: () => gui!.settings,
-        dataFolder: () => expand(gui!.settings.local.data) || gui!.local!.state().defaults.data,
+        dataFolder: () => gui!.local!.dataFolder(),
         local: () => {
             const local = gui!.local!;
 

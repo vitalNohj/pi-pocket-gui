@@ -94,6 +94,8 @@ export function setUpLocalServer(host: LocalHost) {
     let child: ChildProcess | undefined;
     /** The settings it was started with: a change shows "restart needed". */
     let startedWith: string | undefined;
+    /** The data folder the running Pi Pocket uses, which a changed setting does not move until the restart. */
+    let runningData: string | undefined;
     let update: LocalUpdate = { status: "idle" };
     let updateTimer: NodeJS.Timeout | undefined;
     let restartTimer: NodeJS.Timeout | undefined;
@@ -709,6 +711,7 @@ export function setUpLocalServer(host: LocalHost) {
 
         child = proc;
         startedWith = settingsKey();
+        runningData = dataFolderOf(local, defaults().data);
 
         if (proc.pid !== undefined) {
             void writeFile(pidFile, String(proc.pid)).catch(() => {});
@@ -748,6 +751,7 @@ export function setUpLocalServer(host: LocalHost) {
 
             child = undefined;
             url = undefined;
+            runningData = undefined;
             void rm(pidFile, { force: true });
 
             if (quitting || status === "stopping") {
@@ -851,6 +855,8 @@ export function setUpLocalServer(host: LocalHost) {
             };
         },
         installed: () => usable(readCurrent().current),
+        /** Pi Pocket's data folder: the running one's while it runs, else the one the settings name for its next start. */
+        dataFolder: (): string => runningData ?? dataFolderOf(host.settings().local, defaults().data),
         url: () => url,
         /** At the app's start, in local mode: start it when installed, and look for updates. */
         boot: async (): Promise<void> => {
@@ -947,6 +953,11 @@ export function cause(lines: string[]): string {
     return text
         .replace("Pick another with --port.", "Pick another port below.")
         .replace("Fix the problem above, or pick another access mode with --access.", "Fix it, or pick another choice in Who can connect.");
+}
+
+/** The data folder these settings start Pi Pocket with: the one set, or Pi Pocket's own default. */
+export function dataFolderOf(local: { data: string }, fallback: string): string {
+    return expand(local.data) || fallback;
 }
 
 /** `~` at the start of a path is the home folder. */
