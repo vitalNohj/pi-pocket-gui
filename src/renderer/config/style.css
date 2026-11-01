@@ -124,17 +124,23 @@ body.recovering {
 
 .column {
     display: grid;
-    gap: 16px;
+    gap: 12px;
+}
+
+.column,
+.settings,
+.card {
+    min-width: 0;
+}
+
+/* The connection can be taller than the window. Let it scroll with the other cards. */
+[id] {
+    scroll-margin-top: 24px;
 }
 
 @media (min-width: 1000px) {
     .columns {
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    }
-
-    .column {
-        position: sticky;
-        top: calc(max(16px, env(titlebar-area-height, 0px) + 8px));
     }
 }
 
@@ -145,7 +151,8 @@ body.recovering {
 }
 
 h1,
-h2 {
+h2,
+h3 {
     color: var(--text);
     margin: 0;
     font-weight: 600;
@@ -155,8 +162,18 @@ h1 {
     font-size: 22px;
 }
 
-h2 {
+h2,
+h3 {
     font-size: 16px;
+}
+
+.section-title {
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.settings > .section-title:not(:first-child) {
+    margin-top: 12px;
 }
 
 p {
@@ -184,11 +201,33 @@ code {
 .brand {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 14px;
 }
 
 .brand > div {
     flex: 1;
+    min-width: 160px;
+}
+
+.settings-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--hair);
+}
+
+.settings-nav a {
+    padding: 7px 12px;
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 14px;
+    text-decoration: none;
+}
+
+.settings-nav a:hover {
+    background: var(--hover);
 }
 
 /* Pi Pocket's π, as its rail draws it: a serif glyph in the theme's brand color. */
@@ -205,6 +244,7 @@ code {
 }
 
 .card {
+    container-type: inline-size;
     background: var(--ground, var(--bg));
     border: 1px solid var(--hair);
     border-radius: var(--radius);
@@ -222,8 +262,16 @@ code {
     box-shadow: 0 6px 22px rgb(40 40 70 / 12%);
 }
 
+.card-description {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.5;
+}
+
 .card-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
@@ -332,7 +380,8 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 button:focus-visible,
-summary:focus-visible {
+summary:focus-visible,
+a:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
 }
@@ -377,6 +426,7 @@ button {
 }
 
 button.small {
+    min-height: 32px;
     padding: 4px 10px;
     font-size: 13px;
 }
@@ -444,8 +494,14 @@ button:disabled {
 
 .command code {
     flex: 1;
-    white-space: nowrap;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
     color: var(--ok);
+}
+
+.command button {
+    flex: none;
 }
 
 .settings {
@@ -459,7 +515,7 @@ details.card {
 }
 
 summary {
-    padding: 14px 20px;
+    padding: 16px 20px;
     cursor: pointer;
     list-style: none;
     display: flex;
@@ -472,10 +528,24 @@ summary::-webkit-details-marker {
     display: none;
 }
 
+summary > span,
+summary > h3 {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
 summary::after {
     content: "›";
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    margin-left: 12px;
     color: var(--muted);
     font-size: 20px;
+    line-height: 1;
     transition: transform 120ms ease;
 }
 
@@ -502,9 +572,30 @@ details[open] > summary::after {
     align-items: stretch;
 }
 
-.row > span {
+.row > span,
+.row > label {
     display: grid;
+    min-width: 0;
     gap: 2px;
+}
+
+.row small,
+.row-note,
+.config-location {
+    overflow-wrap: anywhere;
+}
+
+.row-group {
+    margin: 0;
+    padding: 14px 0 7px;
+    border-top: 1px solid var(--hair);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.row-group + .row {
+    border-top: 0;
 }
 
 .row strong {
@@ -563,10 +654,20 @@ input[type="checkbox"]:checked::after {
 }
 
 .footer {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
+    gap: 8px 10px;
+}
+
+.footer .config-location {
+    grid-column: 1 / -1;
+    grid-row: 2;
+}
+
+.footer button {
+    grid-column: 2;
+    grid-row: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -709,11 +810,16 @@ details.advanced {
 }
 
 details.advanced > summary {
-    justify-content: flex-start;
     gap: 6px;
-    padding: 10px 0;
+    padding: 12px 0;
     font-size: 13px;
+    color: var(--text);
+}
+
+details.advanced > summary small {
     color: var(--muted);
+    font-size: 12px;
+    font-weight: 400;
 }
 
 details.advanced > summary::after {
@@ -815,7 +921,73 @@ button.danger {
     overflow-wrap: anywhere;
 }
 
-.rows .command code {
-    white-space: normal;
-    overflow-wrap: anywhere;
+.security-note {
+    padding: 10px 12px;
+    margin: 0 0 12px;
+    border-left: 2px solid var(--warn);
+    background: var(--hover);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* A card must adapt to its own width, including when it is half of a wide window. */
+@container (max-width: 480px) {
+    .row:has(> select),
+    .row:has(> .range),
+    .row:has(> .buttons),
+    .row:has(> button) {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .row select {
+        width: 100%;
+        max-width: none;
+    }
+
+    .row .buttons {
+        flex-shrink: 1;
+        justify-content: flex-start;
+    }
+
+    .row > button {
+        align-self: flex-start;
+    }
+
+    .row > .range {
+        justify-content: space-between;
+    }
+
+    input[type="range"] {
+        flex: 1;
+        min-width: 0;
+    }
+}
+
+@media (max-width: 600px) {
+    .page {
+        padding-inline: 16px;
+    }
+
+    .card,
+    summary {
+        padding-inline: 16px;
+    }
+
+    .rows {
+        padding-inline: 16px;
+    }
+
+    .local-rows,
+    .rows.nested {
+        padding-inline: 0;
+    }
+
+    .where label {
+        padding: 12px;
+    }
+
+    .settings-nav a {
+        padding-inline: 10px;
+    }
 }

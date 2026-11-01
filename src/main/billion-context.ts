@@ -48,12 +48,12 @@ export function adapterFiles(tree: readonly TreeEntry[]): TreeEntry[] {
     const files = tree.filter((entry) => entry.type === "blob" && (entry.path === ADAPTER.file || entry.path.startsWith(`${ADAPTER.folder}/`)));
 
     if (!files.some((entry) => entry.path === ADAPTER.file) || !files.some((entry) => entry.path === `${ADAPTER.folder}/bundle.json`)) {
-        throw new Error("The adapter's repository does not hold the adapter's files at that commit.");
+        throw new Error("This extension version is missing required files.");
     }
 
     for (const entry of files) {
         if ((entry.mode !== "100644" && entry.mode !== "100755") || entry.path.split("/").some((part) => part === ".." || part === "")) {
-            throw new Error(`${entry.path} in the adapter's repository is not a plain file.`);
+            throw new Error(`${entry.path} in the extension repository is not a regular file.`);
         }
     }
 
@@ -217,7 +217,7 @@ export function setUpBillionContext(host: BillionContextHost) {
         const commit = (await (await github(`/commits/${ADAPTER.branch}`, "application/vnd.github.sha")).text()).trim();
 
         if (!/^[0-9a-f]{40}$/.test(commit)) {
-            throw new Error("GitHub did not name the adapter's newest commit.");
+            throw new Error("GitHub did not return a valid extension version.");
         }
 
         let version: string | undefined;
@@ -247,12 +247,12 @@ export function setUpBillionContext(host: BillionContextHost) {
 
     /** Downloads the commit's files, checks each against the commit's tree, and puts them in a folder of their own. */
     const fetchFiles = async (commit: string, into: string, step: (text: string) => void): Promise<void> => {
-        step("Listing the adapter's files…");
+        step("Listing extension files…");
 
         const tree = (await (await github(`/git/trees/${commit}?recursive=1`)).json()) as { tree?: TreeEntry[]; truncated?: boolean };
 
         if (tree.truncated === true || tree.tree === undefined) {
-            throw new Error("GitHub did not list all of the adapter's files.");
+            throw new Error("GitHub did not list all extension files.");
         }
 
         const files = adapterFiles(tree.tree);
@@ -286,7 +286,7 @@ export function setUpBillionContext(host: BillionContextHost) {
                 const data = await readFile(from).catch(() => undefined);
 
                 if (data === undefined || blobSha(data) !== entry.sha) {
-                    throw new Error(`${entry.path} does not match the adapter's commit, so nothing was installed.`);
+                    throw new Error(`${entry.path} failed verification. Nothing was installed.`);
                 }
 
                 const to = join(into, ...entry.path.split("/"));
@@ -304,11 +304,11 @@ export function setUpBillionContext(host: BillionContextHost) {
     /** Installs the newest commit, or replaces the installed one with it: off, files swapped, on again. */
     const put = async (step: (text: string) => void): Promise<void> => {
         if (host.local().url === undefined) {
-            throw new Error("Start Pi Pocket first: the app turns the extension on through it.");
+            throw new Error("Start Pi Pocket before installing or turning on the extension.");
         }
 
         if (foreign()) {
-            throw new Error(`The adapter's folder is already in ${folder()}, installed outside the app. Remove that copy first.`);
+            throw new Error(`An extension copy already exists in ${folder()}. Remove that copy before installing here.`);
         }
 
         step("Looking for the newest version…");

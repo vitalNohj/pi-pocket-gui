@@ -18,7 +18,7 @@ Pi Pocket installed and kept current for you · a tray with your pinned sessions
 > **Windows Defender may block the Windows installer.** It flags `pi-pocket-gui-0.2.6-win-x64.exe` as `Program:Win32/Contebrew.A!ml`, a machine-learning guess (`!ml`), not a match with any known malware. The build isn't code-signed yet. The file has been submitted to Microsoft as a false positive. Until it's cleared: in Windows Security → **Protection history**, open the entry and choose **Allow**, then download it again. The source and the build are public: [the workflow](.github/workflows/build.yml) builds every release.
 
 > [!NOTE]
-> **Remote execution is still being worked on.** Pi works on the files and runs the commands of the computer the server is on. With Pi Pocket on this computer, that is this computer. With a server elsewhere (a home server, a VPS), it is that machine, not this one: working on this computer's files from a remote server needs remote execution, which is not in the app yet.
+> **Use this computer from your server with a runner.** Without a runner, Pi uses the server's files and commands. Link this computer to use its files and commands instead. See [Runner](#runner) for setup and access rules.
 
 ## What it is
 
@@ -58,10 +58,10 @@ Open the app and pick where Pi Pocket runs:
 
 ### Pi Pocket on this computer
 
-Pick **This computer** in Settings and click **Install Pi Pocket**. The app downloads the newest Pi Pocket from npm and a Node.js for it from nodejs.org (about 60 MB, 400 MB on disk; checked against nodejs.org's checksums and npm's), starts it, and opens it, signed in as its owner.
+Pick **This computer** in Settings and click **Install Pi Pocket**. The app downloads Pi Pocket and the Node.js it needs (about 60 MB, 400 MB on disk). It starts the server and signs you in as its owner.
 
 - **It runs while the app runs,** also with the window closed to the tray. Quitting the app stops it; running sessions pick up at the next start. With **Launch at login** and **Start hidden**, this computer is an always-on Pi Pocket for your phone.
-- **Who can connect:** this computer only, the local network, your Tailscale network, or anywhere through a Cloudflare link. Also the folder new sessions start in, the port, and the data folder (`~/.pi-pocket` by default, the same as Pi Pocket in a terminal).
+- **Who can connect:** this computer only, the local network, your Tailscale network, or anywhere through a Cloudflare link. **Folder for new sessions** sets the starting folder. **Advanced** holds the server port and data folder (`~/.pi-pocket` by default), plus **Uninstall**. The server log is below it.
 - **Kept up to date:** the app looks for a newer Pi Pocket and Node.js at start and every few hours, and installs them beside the ones in use. They take over when Pi Pocket restarts: **Restart** in Settings, the tray's **Restart Pi Pocket to update**, or the next start of the app. If a new version does not start, the one before runs again. Pi Pocket's own Settings → Updates works too.
 - **Pi Pocket already running** on that port (started in a terminal) is found and offered instead.
 - **It sees your tools:** Pi Pocket gets the same environment as your terminal (your shell's `PATH`), so the agent finds `git`, `node`, and the rest.
@@ -74,7 +74,7 @@ Pi Pocket runs to the window's top edge, and only what sits under the window's b
 
 <img src="docs/images/windows.png" alt="The Windows and Linux layout: minimize, maximize, and close at the top right, with the conversation's border notched around them" width="100%" />
 
-The app tells the page where the buttons are through the [Window Controls Overlay](https://developer.mozilla.org/en-US/docs/Web/API/Window_Controls_Overlay_API), the web's own standard for it. An older Pi Pocket gets a plain band as tall as the buttons. Drag the window by the bar beside them. Settings → Window → Title bar → **The system's** brings back the normal title bar, after a restart.
+The app tells the page where the buttons are through the [Window Controls Overlay](https://developer.mozilla.org/en-US/docs/Web/API/Window_Controls_Overlay_API), the web's own standard for it. An older Pi Pocket gets a plain band as tall as the buttons. Drag the window by the bar beside them. Server settings → Window → Title bar → **System** brings back the normal title bar, after a restart.
 
 ### See-through background
 
@@ -107,9 +107,9 @@ Pi Pocket's mic button (and Alt+V) works in the app, recognised on your computer
 
 Words show while you speak and are corrected when you pause (**Words as you speak**; turn it off to save CPU). A model loads at the first dictation and leaves memory after 10 idle minutes. The mic needs Pi Pocket on `127.0.0.1`/`localhost` or `https`: browsers, and so the app, keep the microphone from plain-http pages on other addresses.
 
-### Billion-context Pi
+### Billion context
 
-The **Billion-context Pi** card installs [billion-context-pi-pocket-adapter](https://github.com/vitalNohj/billion-context-pi-pocket-adapter) (context compression for long conversations) in the Pi Pocket the app runs on this computer, and turns it on. Pi Pocket must be running.
+The **Billion context** card, under **Server tools**, installs [billion-context-pi-pocket-adapter](https://github.com/vitalNohj/billion-context-pi-pocket-adapter) (context compression for long conversations) in the Pi Pocket the app runs on this computer, and turns it on. Pi Pocket must be running.
 
 - **Install** downloads the newest commit of the adapter's `main` branch from GitHub, checks each file against the git hash the commit lists, and puts `billion-context-pi-pocket-adapter.ts` and its folder in Pi Pocket's `extensions` folder. Then it turns the extension on through Pi Pocket's API.
 - **Update** shows when a newer commit is out, at each start and as often as the app looks for its own updates. It turns the extension off, swaps the files, and turns it on again. **Update automatically** does this without asking (off by default).
@@ -118,27 +118,56 @@ The **Billion-context Pi** card installs [billion-context-pi-pocket-adapter](htt
 
 With **Another server**, the card shows the command that installs it on that server instead.
 
-### This computer as a runner
+### Runner
 
-A Pi Pocket server can run a session's tools on this computer: its files and commands here, while the agent, its models, its keys, and its history stay on the server. The computer connects out to the server, so it needs no SSH or open port.
+Use the **Runner** card under **Server tools**, or the **Runner** link at the top of Server settings. A runner lets your server use this computer's files and commands. The agent, models, API keys, and history stay on the server. No SSH or open port is needed.
 
-- **Link it:** open the server in the app, then **Menu → Computers → Link a computer → Link this computer**. The app installs what the runner needs (Node.js and Pi Pocket, the first time only), links this computer with a one-time code, and runs `pi-pocket runner` while it is open, also hidden in the tray.
-- **Use it:** in Computers, **New session** on this computer picks a folder here. The session's title says which computer it runs on.
-- The **This computer as a runner** card shows whether it is connected, turns the runner off and on, and unlinks it. Off, or with the app closed, the server shows the computer as offline, and its sessions' tools fail until it is back. A short drop (up to 2 minutes) loses nothing: running commands carry on.
-- **Another computer, such as a server:** install Pi Pocket there with `npm install -g`, then run `pi-pocket runner serve`. It asks for the server's address and the one-time code from **Computers → Link a computer**, and on Linux offers to run as a service. Run it again later and it shows the saved link. The card and the Computers sheet give the steps.
-- Only you can start sessions on a computer you linked. By default they are yours alone too: nobody else on the server sees or prompts them. The server's owner can turn on **Share sessions on linked computers** in Computers; then they follow the usual sharing rules, and their commands run here for whoever prompts them.
+1. Open your server in the desktop app. Choose **Menu → Runners → Link a computer → Link this computer**. The app installs Node.js and Pi Pocket if needed, then links this computer with a one-time code.
+2. Under **Menu → Runners**, choose **New session** on this computer and pick a folder. The session title shows which computer it uses.
+3. Keep the app open, including in the tray. The **Runner** card shows the connection state. Use **Enable runner**, **Reconnect**, or **Unlink** to manage the link.
 
-The server must have runner support: Pi Pocket from [vitalNohj/pi-pocket](https://github.com/vitalNohj/pi-pocket) `live-0.28` for now, which the app also installs for **This computer**.
+When the runner is off or the app is closed, the server shows this computer as offline. Its sessions cannot use tools here until it reconnects. Running commands continue through a connection drop of up to 2 minutes.
+
+**Link another computer:** open that section in the Runner card. On the server, choose **Menu → Runners → Link a computer**, then **Link another computer**. In a browser, choose **Make a link code** instead. The code expires after 10 minutes. On the other computer, install Node.js 22.19 or newer, then run:
+
+```sh
+npm install -g https://codeload.github.com/vitalNohj/pi-pocket/tar.gz/live-0.28
+pi-pocket runner serve
+```
+
+Enter the server address and link code when asked. On Linux, the runner offers to start as a service at login. Run the command again to use the saved link.
+
+**Access:** only you can start sessions on a computer you linked. These sessions are private by default. The server owner can enable **Share sessions on linked computers** under **Menu → Runners**. Anyone who can prompt a shared session can run commands on that computer.
+
+The server must support runners. For now, use [vitalNohj/pi-pocket](https://github.com/vitalNohj/pi-pocket) `live-0.28`. This is also the version the app installs for **This computer**.
 
 ### Settings
 
-Everything is on one screen: **Server settings…** in the File menu, the tray, Pi Pocket's own menu, a right-click on the page, or Ctrl+, (⌘, on macOS). The shortcut belongs to the desktop app and works even on a broken server page. The badge says **Connected** once Pi Pocket is open; **Connect** waits until you change the address and check the new one.
+Open **Server settings…** from the File menu, tray menu, Pi Pocket menu, or a right-click on the page. You can also press Ctrl+, (⌘, on macOS). This shortcut works even if the server page fails.
 
-Use the **web interface address** that opens Pi Pocket in your browser, not a model/API endpoint. A failed check keeps you in settings and does not replace your saved server or close a working connection. If a sign-in gateway prevents detection, **Open webpage anyway** is offered only for an HTML page; an app-owned **Server settings** button stays visible until Pi Pocket is detected. HTTP errors and non-webpage responses (including JSON) reopen settings automatically rather than leaving you on an error page.
+The top links go to **Connection**, **App preferences**, **Runner**, and **Server tools**. Connection comes first. App preferences follow, then server tools. Most cards start closed. Each card has a short description. Ports, timeouts, limits, and update intervals are in closed **Advanced** sections.
+
+| Section | Card | What it controls |
+|---|---|---|
+| Connection | **Pi Pocket on this computer** | Install and run the server here. Choose a session folder and who can connect. Server updates are separate from app updates. |
+| Connection | **Another server** | Enter a full address or a host and port. Check it, then connect. |
+| Connection | **Get the server** | Set up Pi Pocket on another computer. Shown with **Another server**. |
+| App preferences | **Window** | Startup, tray, title bar, links, and the global shortcut. |
+| App preferences | **Appearance** | Background transparency, opacity, and system effects. |
+| App preferences | **Notifications** | Desktop alerts, sound, and approval buttons. |
+| App preferences | **Dictation** | Download speech models and turn speech into text on this computer. |
+| App preferences | **Updates** | Desktop app updates. The check interval is in **Advanced**. |
+| Server tools | **Runner** | Let your server use this computer's files and commands. See [Runner](#runner). |
+| Server tools | **Billion context** | Install context compression here, or get installation steps for your server. |
+| Server tools | **Remote server** | Connect at startup, allow other addresses, and set check and retry limits. Shown with **Another server**. |
+
+Use the server address you open in a browser, not a model API address. A failed check keeps your saved address and any working connection. The status shows **Connected** when Pi Pocket is open. To change servers, enter and check the new address before you connect.
+
+If a sign-in page hides Pi Pocket, choose **Open webpage anyway**. This is available only for HTML pages. A **Server settings** button stays visible until Pi Pocket is detected. HTTP errors and other responses return to settings.
 
 <img src="docs/images/settings.png" alt="The settings screen: the connection on the left, the Window settings on the right" width="100%" />
 
-With **Another server** picked, the **Remote server** card has what the app does with it: open it at start when it answers, and other addresses the window may show (a sign-in page in front of it, such as Cloudflare Access). Its **Advanced** part holds how the app watches the server: a check every 10 seconds while it is open, an outage after 3 failed checks in a row (this screen then says the server is down, and the app keeps trying), retries up to 30 seconds apart, and 4 seconds for each check to answer.
+In **Remote server**, **Other allowed addresses** can include a sign-in page, such as Cloudflare Access. Enter one address per line, without a path. By default, **Advanced** uses a 10-second server check interval, 3 failed checks before reconnecting, a 30-second maximum retry delay, and a 4-second check timeout. The app keeps trying after a connection fails.
 
 The settings are also a JSON file you can edit by hand. A value that is not valid falls back to its default, and the settings screen lists it.
 
@@ -150,7 +179,7 @@ The settings are also a JSON file you can edit by hand. A value that is not vali
 
 ### Updates
 
-The app looks for a new release at start and every 6 hours (Settings → Updates → **Check now**).
+The **Updates** card manages the desktop app, not the server. The app checks at startup and every 6 hours by default. Choose **Check now** to check manually. Change the interval in **Updates → Advanced**. Server updates are under **Connection → Pi Pocket on this computer → Server updates**.
 
 - **Windows and the AppImage** download it and install it when the app restarts. The app asks first.
 - **macOS:** until the app is signed by Apple, macOS will not let it replace itself. It downloads the new disk image to Downloads, checked against GitHub's checksum, then quits and opens it (macOS cannot replace an app that is running): drag the app into Applications over the old one, then open it again. Your settings and sign-in stay.
@@ -164,7 +193,6 @@ Pi Pocket's page runs in the app as it does in a browser, with one addition: a s
 
 Being worked on, none of it in the app yet:
 
-- **Remote execution:** sessions on your server whose files and commands are on this computer.
 - **New session from anywhere:** ⌘N / Ctrl+N, the dock's or taskbar's menu, and a `pi-pocket://new` link.
 - **Signed builds** for macOS and Windows, so updates install themselves everywhere.
 

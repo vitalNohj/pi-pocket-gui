@@ -40,13 +40,13 @@ test("the adapter's files are its module and its folder, nothing else in the rep
 });
 
 test("a commit without the adapter, or with links in it, is refused", () => {
-    assert.throws(() => adapterFiles([blob("README.md")]), /does not hold/);
-    assert.throws(() => adapterFiles([blob(ADAPTER.file)]), /does not hold/);
+    assert.throws(() => adapterFiles([blob("README.md")]), /missing required files/);
+    assert.throws(() => adapterFiles([blob(ADAPTER.file)]), /missing required files/);
     assert.throws(
         () => adapterFiles([blob(ADAPTER.file), blob(`${ADAPTER.folder}/bundle.json`), blob(`${ADAPTER.folder}/link`, "120000")]),
-        /not a plain file/,
+        /not a regular file/,
     );
-    assert.throws(() => adapterFiles([blob(ADAPTER.file), blob(`${ADAPTER.folder}/bundle.json`), blob(`${ADAPTER.folder}/../x`)]), /not a plain file/);
+    assert.throws(() => adapterFiles([blob(ADAPTER.file), blob(`${ADAPTER.folder}/bundle.json`), blob(`${ADAPTER.folder}/../x`)]), /not a regular file/);
 });
 
 test("the command for another server unpacks only the adapter's files into the extensions folder", () => {
