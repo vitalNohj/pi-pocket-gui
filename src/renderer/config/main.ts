@@ -484,7 +484,7 @@ function render(next: ConfigState): void {
     document.body.classList.toggle("recovering", next.recovery);
     element("recovery").hidden = !next.recovery;
     element("settings-page").hidden = next.recovery;
-    element("settings-shortcut").textContent = `Open Server settings with ${next.platform === "darwin" ? "⌘," : "Ctrl+,"}, the tray menu, or a right-click on the page.`;
+    element("settings-shortcut").textContent = `Open Server settings from the tray menu, with a right-click on the page, or with ${next.platform === "darwin" ? "⌘ + comma" : "Ctrl + comma"}.`;
     renderLocal(next);
     renderDictation(next);
     renderBillionContext(next);
@@ -777,7 +777,7 @@ function renderTitleBar(next: ConfigState): void {
     element("title-bar-note").textContent =
         next.platform === "darwin"
             ? "Seamless puts the window buttons over the page."
-            : "Seamless puts the window buttons over the page. Menu shortcuts still work, including Ctrl+, for Server settings.";
+            : "Seamless puts the window buttons over the page. Menu shortcuts still work, such as Ctrl + comma for Server settings.";
 }
 
 /** The Appearance card: what this desktop can do, and the config screen itself see-through like the server's page. */
