@@ -119,7 +119,35 @@ export interface Settings {
         /** Install newer versions of the billion-context-pi adapter in this computer's Pi Pocket without asking. */
         autoUpdate: boolean;
     };
+    /** This computer as a runner for a Pi Pocket server (src/main/runner.ts). */
+    runner: {
+        /** Run `pi-pocket runner` while the app runs, once this computer is linked. */
+        enabled: boolean;
+    };
 }
+
+/** This computer as a runner (src/main/runner.ts). */
+export interface RunnerState {
+    /**
+     * unlinked: no link yet. off: linked, turned off. connecting: started, not connected yet (or reconnecting).
+     * connected: the server can run sessions' tools here. failed: it stopped and starts again. ended: the server ended
+     * the link (the computer was removed): link again. stopping: on its way off.
+     */
+    status: "unlinked" | "off" | "connecting" | "connected" | "failed" | "ended" | "stopping";
+    message?: string;
+    /** The server this computer is linked to, and its name there. */
+    link?: { server: string; id: string; name: string };
+    /** A step under way (installing Pi Pocket for it, linking). */
+    busy?: string;
+    enabled: boolean;
+    /** An installed Pi Pocket on this computer has the runner. */
+    available: boolean;
+    /** The name this computer suggests for itself. */
+    computerName: string;
+    log: string[];
+}
+
+export type RunnerAction = "unlink" | "restart";
 
 /** One speech model, as the settings show it. */
 export interface DictationModelState {
@@ -305,6 +333,7 @@ export interface ConfigState {
     local: LocalState;
     dictation: DictationState;
     billionContext: BillionContextState;
+    runner: RunnerState;
 }
 
 /** What the config page can ask of this computer's Pi Pocket. */
@@ -391,6 +420,8 @@ export interface HostHello {
     visible: boolean;
     /** Offline dictation can run here: the page's mic button uses it (src/main/dictation.ts). */
     dictation: boolean;
+    /** This computer's name, for "Link this computer" (the bridge's `runner` capability). */
+    computerName: string;
 }
 
 /** What the config page can ask of the main process. */
@@ -418,6 +449,7 @@ export interface GuiConfigApi {
     dictation(action: DictationAction): Promise<void>;
     showDictationFolder(): Promise<void>;
     billionContext(action: BillionContextAction): Promise<void>;
+    runner(action: RunnerAction): Promise<void>;
     /** The main process asks to show a section of the settings, such as "dictation". */
     onFocus(listener: (section: string) => void): () => void;
     onState(listener: (state: ConfigState) => void): () => void;

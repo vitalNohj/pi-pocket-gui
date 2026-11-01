@@ -31,7 +31,7 @@ if (hello !== null && typeof hello === "object") {
     contextBridge.exposeInMainWorld("pocketHost", {
         kind: "pi-pocket-gui",
         apiVersion: API_VERSION,
-        capabilities: ["menu", "badge", "notify", "visibility", "pinned", "open"],
+        capabilities: ["menu", "badge", "notify", "visibility", "pinned", "open", "runner"],
         menuItems: () => [{ id: "server-settings", label: "Server settings…", hint: "This desktop app's connection" }],
         invoke: (id: unknown) => {
             if (typeof id !== "string") {
@@ -51,6 +51,13 @@ if (hello !== null && typeof hello === "object") {
         visible: () => visible,
         setPinned: (list: unknown) => {
             ipcRenderer.send("host:pinned", list);
+        },
+        // This computer as a runner (Pi Pocket's docs/runners.md): its name, and linking it with a one-time code.
+        computerName: () => hello.computerName,
+        linkRunner: (request: unknown) => {
+            const code = typeof request === "object" && request !== null ? (request as { code?: unknown }).code : undefined;
+
+            return ipcRenderer.invoke("host:link-runner", { code }) as Promise<{ ok: boolean; error?: string }>;
         },
         // One listener: the page's `web/host.js` passes each event on to its own.
         subscribe: (next: unknown) => {

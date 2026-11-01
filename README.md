@@ -118,6 +118,18 @@ The **Billion-context Pi** card installs [billion-context-pi-pocket-adapter](htt
 
 With **Another server**, the card shows the command that installs it on that server instead.
 
+### This computer as a runner
+
+A Pi Pocket server can run a session's tools on this computer: its files and commands here, while the agent, its models, its keys, and its history stay on the server. The computer connects out to the server, so it needs no SSH or open port.
+
+- **Link it:** open the server in the app, then **Menu → Computers → Link a computer → Link this computer**. The app installs what the runner needs (Node.js and Pi Pocket, the first time only), links this computer with a one-time code, and runs `pi-pocket runner` while it is open, also hidden in the tray.
+- **Use it:** in Computers, **New session** on this computer picks a folder here. The session's title says which computer it runs on.
+- The **This computer as a runner** card shows whether it is connected, turns the runner off and on, and unlinks it. Off, or with the app closed, the server shows the computer as offline, and its sessions' tools fail until it is back. A short drop (up to 2 minutes) loses nothing: running commands carry on.
+- **Another computer, such as a server:** the card and the Computers sheet give the steps: `npm install -g` Pi Pocket there, `pi-pocket runner link <server> <code>`, then `pi-pocket runner service` (Linux with systemd) or `pi-pocket runner` in a terminal.
+- Anyone who can prompt such a session can do on this computer what you can. Only the server's owner can start one.
+
+The server must have runner support: Pi Pocket from [vitalNohj/pi-pocket](https://github.com/vitalNohj/pi-pocket) `live-0.28` for now, which the app also installs for **This computer**.
+
 ### Settings
 
 Everything is on one screen: **Server settings…** in the File menu, the tray, Pi Pocket's own menu, a right-click on the page, or Ctrl+, (⌘, on macOS). The shortcut belongs to the desktop app and works even on a broken server page. The badge says **Connected** once Pi Pocket is open; **Connect** waits until you change the address and check the new one.

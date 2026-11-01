@@ -24,6 +24,7 @@ const api: GuiConfigApi = {
     dictation: (action) => ipcRenderer.invoke("config:dictation", action) as Promise<void>,
     showDictationFolder: () => ipcRenderer.invoke("config:show-dictation-folder") as Promise<void>,
     billionContext: (action) => ipcRenderer.invoke("config:billion-context", action) as Promise<void>,
+    runner: (action) => ipcRenderer.invoke("config:runner", action) as Promise<void>,
     onFocus: (listener) => {
         const handler = (_event: unknown, section: string) => {
             listener(section);
