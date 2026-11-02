@@ -760,14 +760,39 @@ input[type="range"] {
     accent-color: var(--accent);
 }
 
-.where span {
+.where .choice {
     display: grid;
     gap: 2px;
+    min-width: 0;
+}
+
+/* The name and its status: the pill goes under the name where the choice is narrow. */
+.where .choice-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+}
+
+.where .pill {
+    font-size: 11px;
+    padding: 1px 7px;
 }
 
 .where small {
     color: var(--muted);
     font-size: 13px;
+}
+
+/* An error's first lines; the card shows all of it. */
+.where .choice-error {
+    color: var(--err);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    overflow-wrap: anywhere;
 }
 
 .local-rows {

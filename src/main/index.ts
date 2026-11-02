@@ -17,6 +17,7 @@ import {
     nativeTheme,
     nativeImage,
     net,
+    Notification,
     session,
     shell,
     Tray,
@@ -26,7 +27,7 @@ import {
     type MenuItemConstructorOptions,
     type WebContents,
 } from "electron";
-import type { BillionContextAction, ConfigReason, ConfigState, DictationAction, LocalAction, ProbeResult, Settings, SettingsProblem, ThemeColors, TitleBarStyle } from "../shared/types";
+import type { BillionContextAction, ConfigReason, ConfigState, DictationAction, LocalAction, ProbeResult, Settings, SettingsProblem, Side, ThemeColors, TitleBarStyle } from "../shared/types";
 import { retryDelayMs } from "./backoff";
 import { mayConnect, NavigationResponses } from "./connection";
 import { CONFIG_URL, isAppPage, registerAppScheme, serveAppPages } from "./config-protocol";
@@ -52,6 +53,24 @@ import { ADAPTER, ADAPTER_PAGE, setUpBillionContext } from "./billion-context";
 import { computerName, setUpRunner } from "./runner";
 import { askRunnerSession } from "./runner-dialog";
 import { setUpLocalServer } from "./local-server";
+import {
+    canReturn,
+    connectFailed,
+    didNotLoad,
+    keepsLocalAsked,
+    localChoiceStatus,
+    LocalStopNotice,
+    reconnectsByItself,
+    remoteChoiceStatus,
+    returnsByItself,
+    shownReason,
+    sideOf,
+    stoppedAnswering,
+    whenLocalReady,
+    whenLost,
+    type LocalDown,
+    type RemoteError,
+} from "./server-choice";
 import { setUpUpdates } from "./updates";
 import { setLaunchAtLogin, startedAtLogin, trayAvailable } from "./platform";
 import { networkMessage, probe } from "./probe";
@@ -99,8 +118,21 @@ interface Gui {
     configPath: string;
     showing: "server" | "config";
     reason: ConfigReason;
+    /**
+     * The side of Connection the config screen shows. Choosing one only shows it; the server the window uses is
+     * `settings.server.mode` (src/main/server-choice.ts).
+     */
+    viewing: Side;
+    /** Why the window has no other server: its connection dropped, or the last Connect failed. */
+    remoteError: RemoteError | undefined;
+    /** The person asked for this computer's Pi Pocket (Start, Install): once it is ready, the window uses it. */
+    localAsked: boolean;
+    /** This computer's Pi Pocket, while it runs: its address and login link, for Open. */
+    localLogin: { url: string; loginPath: string } | undefined;
+    /** When this computer's Pi Pocket stopped on its own and the person was told. */
+    localStopNotice: LocalStopNotice;
     probe: ProbeResult | undefined;
-    /** The address the server view has loaded, once it did. */
+    /** The address the server view has loaded, once it did: of the server the window uses. */
     loadedUrl: string | undefined;
     /** An explicitly opened, unverified HTML page keeps an app-owned way back visible. */
     unverified: boolean;
@@ -223,6 +255,11 @@ async function start(): Promise<void> {
         configPath,
         showing: "config",
         reason: { kind: "first-run" },
+        viewing: loaded.settings.server.mode,
+        remoteError: undefined,
+        localAsked: false,
+        localLogin: undefined,
+        localStopNotice: new LocalStopNotice(),
         probe: undefined,
         loadedUrl: undefined,
         unverified: false,
@@ -333,11 +370,11 @@ async function start(): Promise<void> {
         },
         ready: (url, loginPath) => {
             gui?.billionContext?.serverReady();
-            openLocal(url, loginPath);
+            localReady(url, loginPath);
         },
-        down: () => {
+        down: (why) => {
             gui?.billionContext?.serverDown();
-            localDown();
+            localDown(why);
         },
     });
 
@@ -404,6 +441,7 @@ async function start(): Promise<void> {
 
             if (gui.showing !== "server") {
                 gui.reason = { kind: "user" };
+                gui.viewing = gui.settings.server.mode;
                 show("server");
             }
 
@@ -570,6 +608,7 @@ async function start(): Promise<void> {
 
     // This computer's Pi Pocket: the window opens it once it is ready, and shows its state until then.
     if (gui.settings.server.mode === "local") {
+        gui.viewing = "local";
         showConfig({ kind: "local" });
         void gui.local!.boot();
 
@@ -616,16 +655,37 @@ function currentOrigin(): string {
     return normalized.ok ? normalized.origin : "null";
 }
 
-/** This computer's Pi Pocket is ready: sign in with its login link (the cookie keeps the app signed in), and show it. */
-function openLocal(url: string, loginPath: string): void {
+/** This computer's Pi Pocket is ready: open it when the person asked for it, or when the window uses it. */
+function localReady(url: string, loginPath: string): void {
     const state = gui!;
+    const asked = state.localAsked;
 
-    if (state.settings.server.mode !== "local") {
+    state.localLogin = { url, loginPath };
+    state.localAsked = false;
+    state.localStopNotice.reset();
+
+    const next = whenLocalReady({ inUse: state.settings.server.mode, asked, showing: state.showing, viewing: state.viewing });
+
+    if (next === "none") {
+        pushConfigState();
+
         return;
     }
 
+    openLocal(url, loginPath, next === "show");
+}
+
+/**
+ * The window uses this computer's Pi Pocket: sign in with its login link (the cookie keeps the app signed in). This
+ * ends a connection to another server. `display`: show it now; otherwise it loads, and Back on This computer shows it.
+ */
+function openLocal(url: string, loginPath: string, display: boolean): void {
+    const state = gui!;
+
+    useServer("local");
+    stopHealth();
     stopRetry();
-    state.reason = { kind: "user" };
+    state.retryAttempt = 0;
     state.loadedUrl = url;
     state.unverified = false;
     state.signingIn = true;
@@ -633,55 +693,136 @@ function openLocal(url: string, loginPath: string): void {
     void state.server.webContents.loadURL(`${url}${loginPath}`).catch(() => {
         // did-fail-load shows the error.
     });
-    show("server");
+    // What went wrong before, with either server, is over: the window uses this one now.
+    state.reason = { kind: "user" };
+
+    if (display) {
+        state.viewing = "local";
+        show("server");
+    } else {
+        pushConfigState();
+    }
 }
 
-/** This computer's Pi Pocket stopped, failed, or is not installed: show its state. */
-function localDown(): void {
+/** Saves the side of the server the window uses: the app opens it at its next start. */
+function useServer(side: Side): void {
     const state = gui!;
 
+    if (state.settings.server.mode !== side) {
+        state.settings = { ...state.settings, server: { ...state.settings.server, mode: side } };
+        saveSettings(state.configPath, state.settings);
+    }
+}
+
+/**
+ * This computer's Pi Pocket stopped, failed, or is not installed. When the window uses it, the window loses its server;
+ * while another server is in use, nothing changes but its card and its choice. Stopping on its own is also told in a
+ * desktop notification.
+ */
+function localDown(why: LocalDown): void {
+    const state = gui!;
+
+    state.localLogin = undefined;
+
+    // A crash, or an update that goes back to the version before, keeps the person's Start: it starts again by
+    // itself, and then opens. Stop, Uninstall, or no usable Pi Pocket ends it.
+    if (!keepsLocalAsked(why)) {
+        state.localAsked = false;
+    }
+
+    if (why.kind === "stopped") {
+        state.localStopNotice.reset();
+    }
+
+    if (state.localStopNotice.down(why, state.quitting) && why.kind === "crashed") {
+        notifyLocalStopped(why.message);
+    }
+
     if (state.settings.server.mode !== "local") {
+        pushConfigState();
+
         return;
     }
 
     stopHealth();
     stopRetry();
 
-    if (state.loadedUrl !== undefined) {
+    const loaded = state.loadedUrl !== undefined;
+
+    if (loaded) {
         state.loadedUrl = undefined;
         void state.server.webContents.loadURL("about:blank").catch(() => {});
     }
 
-    showConfig({ kind: "local" });
+    const next = whenLost({ lost: "local", showing: state.showing, viewing: state.viewing });
+
+    if (next.show) {
+        state.viewing = "local";
+        showConfig({ kind: "local" });
+    } else {
+        pushConfigState();
+    }
 }
 
-/** Switches between this computer's Pi Pocket and another server. */
-async function useMode(mode: "local" | "remote"): Promise<void> {
+/** A desktop notification: this computer's Pi Pocket stopped on its own. A click opens This computer in settings. */
+function notifyLocalStopped(message: string): void {
     const state = gui!;
 
-    if (state.settings.server.mode === mode) {
+    if (!state.settings.notifications.enabled || !Notification.isSupported()) {
         return;
     }
 
-    state.settings = { ...state.settings, server: { ...state.settings.server, mode } };
-    saveSettings(state.configPath, state.settings);
-    stopHealth();
-    stopRetry();
+    const notification = new Notification({
+        title: "Pi Pocket on this computer stopped",
+        body: message,
+        silent: !state.settings.notifications.sound,
+        icon: join(ASSETS, "icon-192.png"),
+    });
+
+    notification.on("click", () => {
+        openSettingsOn("local");
+    });
+    notification.show();
+}
+
+/** The server the window uses stopped answering, did not load, or its page crashed. */
+function serverLost(reason: ConfigReason, retry: boolean): void {
+    const state = gui!;
+    const lost = state.settings.server.mode;
+    const url = state.loadedUrl ?? serverUrl();
+
     state.loadedUrl = undefined;
-    state.probe = undefined;
-    void state.server.webContents.loadURL("about:blank").catch(() => {});
+    stopHealth();
 
-    if (mode === "local") {
-        showConfig({ kind: "local" });
-        await state.local!.boot();
+    if (lost === "remote") {
+        state.remoteError =
+            reason.kind === "outage"
+                ? stoppedAnswering(reason.url)
+                : reason.kind === "load-failed"
+                  ? didNotLoad(reason.url)
+                  : { kind: "dropped", url, line: "The page stopped" };
+    }
+
+    const next = whenLost({ lost, showing: state.showing, viewing: state.viewing });
+
+    if (!next.show) {
+        // The person looks at the other side: nothing jumps. The lost side shows what happened when it is opened, and
+        // a remote server is checked again in the background, as after any outage.
+        state.reason = reason;
+
+        if (retry && lost === "remote") {
+            scheduleRetry();
+        } else {
+            pushConfigState();
+        }
 
         return;
     }
 
-    await state.local!.stop();
-    showConfig({ kind: "user" });
+    state.viewing = next.viewing;
+    showConfig(reason);
 
-    if ((await checkAddress(state.settings.server.url)).kind !== "detected") {
+    if (retry && next.retry) {
         scheduleRetry();
     }
 }
@@ -692,12 +833,17 @@ async function localAction(action: LocalAction): Promise<void> {
 
     switch (action) {
         case "install":
-            await local.install();
+            // Started once installed, and opened: the window uses it.
+            state.localAsked = true;
+            await local.install(true);
             break;
         case "start":
+            state.localAsked = true;
+            state.localStopNotice.reset();
             await local.start();
             break;
         case "stop":
+            state.localAsked = false;
             await local.stop();
             break;
         case "restart":
@@ -710,20 +856,24 @@ async function localAction(action: LocalAction): Promise<void> {
             shell.showItemInFolder(local.logFile);
             break;
         case "open": {
+            // The app's own Pi Pocket runs: the window uses it, which ends a connection to another server.
+            if (local.state().status === "running" && state.localLogin !== undefined) {
+                openLocal(state.localLogin.url, state.localLogin.loginPath, true);
+                break;
+            }
+
+            if (local.state().status !== "external") {
+                state.localAsked = true;
+                await local.start();
+                break;
+            }
+
             // A Pi Pocket started outside the app answers at the port: open it as another server.
             const url = local.state().url ?? `http://127.0.0.1:${String(state.settings.local.port)}`;
 
-            state.settings = { ...state.settings, server: { ...state.settings.server, url } };
-            await useMode("remote");
             connect(url);
             break;
         }
-        case "use-local":
-            await useMode("local");
-            break;
-        case "use-remote":
-            await useMode("remote");
-            break;
         case "uninstall": {
             const { response } = await dialog.showMessageBox(state.window, {
                 type: "warning",
@@ -851,17 +1001,27 @@ function toggleWindow(): void {
 
 function configState(): ConfigState {
     const state = gui!;
+    const inUse = state.settings.server.mode;
+    const connectedUrl = inUse === "remote" ? state.loadedUrl : undefined;
+    const local = state.local!.state();
 
     return {
         settings: state.settings,
         defaults: defaultSettings(),
         problems: state.problems,
         configPath: state.configPath,
-        reason: state.reason,
+        reason: shownReason(state.reason, sideOf(state.reason, inUse), state.viewing),
         ...(state.probe === undefined ? {} : { probe: state.probe }),
-        ...(state.retry === undefined ? {} : { nextRetryAt: state.retry.at }),
-        ...(state.loadedUrl === undefined ? {} : { connectedUrl: state.loadedUrl }),
-        canReturn: state.loadedUrl !== undefined,
+        ...(state.retry === undefined || state.viewing !== "remote" ? {} : { nextRetryAt: state.retry.at }),
+        ...(connectedUrl === undefined ? {} : { connectedUrl }),
+        viewing: state.viewing,
+        inUse,
+        choices: {
+            local: localChoiceStatus(local),
+            remote: remoteChoiceStatus({ connectedUrl, error: state.remoteError }),
+        },
+        ...(connectedUrl === undefined && state.remoteError?.kind === "dropped" ? { disconnected: { url: state.remoteError.url, line: state.remoteError.line } } : {}),
+        canReturn: canReturn({ inUse, viewing: state.viewing, loaded: state.loadedUrl !== undefined }),
         recovery: state.showing === "server" && state.unverified,
         trayAvailable: state.trayAvailable,
         translucency: state.appearance?.support() ?? { kind: "unsupported", message: "" },
@@ -871,7 +1031,7 @@ function configState(): ConfigState {
         platform: process.platform,
         appVersion: app.getVersion(),
         update: state.updates?.state() ?? { method: "source", status: "idle" },
-        local: state.local!.state(),
+        local,
         dictation: state.dictation!.state(),
         billionContext: state.billionContext!.state(),
         runner: state.runner!.state(),
@@ -960,6 +1120,15 @@ function connect(url: string, unverified = false): void {
     state.retryAttempt = 0;
     state.reason = { kind: "user" };
     state.unverified = unverified;
+    state.remoteError = undefined;
+    state.viewing = "remote";
+    state.localAsked = false;
+
+    // The window uses another server now; this computer's Pi Pocket keeps running until the person stops it.
+    if (state.settings.server.mode !== "remote") {
+        useServer("remote");
+        state.loadedUrl = undefined;
+    }
 
     if (state.loadedUrl !== undefined && sameAddress(state.loadedUrl, normalized.url)) {
         show("server");
@@ -1017,10 +1186,7 @@ function watchServerView(): void {
             return;
         }
 
-        gui.loadedUrl = undefined;
-        stopHealth();
-        showConfig({ kind: "load-failed", url, message: networkMessage(new Error(description), gui.settings.connection.probeTimeoutMs) });
-        scheduleRetry();
+        serverLost({ kind: "load-failed", url, message: networkMessage(new Error(description), gui.settings.connection.probeTimeoutMs) }, true);
     });
 
     contents.on("render-process-gone", (_event, details) => {
@@ -1028,10 +1194,7 @@ function watchServerView(): void {
             return;
         }
 
-        gui.loadedUrl = undefined;
-        stopHealth();
-        showConfig({ kind: "crashed", message: `The page stopped (${details.reason}).` });
-        scheduleRetry();
+        serverLost({ kind: "crashed", message: `The page stopped (${details.reason}).` }, true);
     });
 
     contents.on("page-title-updated", (_event, title) => {
@@ -1046,11 +1209,9 @@ function watchServerView(): void {
         const message = responses.committed(url, status, gui?.unverified ?? false);
 
         if (gui !== undefined && gui.loadedUrl !== undefined && message !== undefined) {
-            gui.loadedUrl = undefined;
             gui.unverified = false;
-            stopHealth();
             stopRetry();
-            showConfig({ kind: "load-failed", url: serverUrl(), message });
+            serverLost({ kind: "load-failed", url: serverUrl(), message }, false);
         }
     });
 
@@ -1264,11 +1425,6 @@ function stopRetry(): void {
     }
 }
 
-/** The config screen opened because the server failed, not because the person asked: go back once it answers. */
-function returnsByItself(reason: ConfigReason): boolean {
-    return reason.kind === "outage" || reason.kind === "load-failed" || reason.kind === "not-detected";
-}
-
 async function retry(): Promise<void> {
     const state = gui!;
 
@@ -1281,11 +1437,15 @@ async function retry(): Promise<void> {
     }
 
     if (found.kind === "detected") {
-        state.retryAttempt = 0;
-
-        if (returnsByItself(state.reason) && state.settings.connection.autoConnect) {
+        if (reconnectsByItself({ reason: state.reason, viewing: state.viewing, autoConnect: state.settings.connection.autoConnect })) {
+            state.retryAttempt = 0;
             connect(state.settings.server.url);
+        } else if (returnsByItself(state.reason) && state.settings.connection.autoConnect) {
+            // The person looks at This computer: the app does not jump. It goes back at a check after they look at
+            // Another server again.
+            scheduleRetry();
         } else {
+            state.retryAttempt = 0;
             pushConfigState();
         }
 
@@ -1326,10 +1486,7 @@ function startHealth(): void {
             gui.health.failures += 1;
 
             if (gui.health.failures >= gui.settings.connection.failuresBeforeOutage) {
-                stopHealth();
-                gui.loadedUrl = undefined;
-                showConfig({ kind: "outage", url: found.url, message: found.message });
-                scheduleRetry();
+                serverLost({ kind: "outage", url: found.url, message: found.message }, true);
 
                 return;
             }
@@ -1416,9 +1573,16 @@ function createTray(): Tray {
     return tray;
 }
 
+/** The config screen, on the side of the server in use. Menus call it with their own arguments: it takes none. */
 function openSettings(): void {
+    openSettingsOn(undefined);
+}
+
+/** The config screen, on `side`, or on the side of the server in use. */
+function openSettingsOn(side: Side | undefined): void {
     if (gui !== undefined) {
         gui.connectionAttempt++;
+        gui.viewing = side ?? gui.settings.server.mode;
     }
 
     showWindow();
@@ -1523,7 +1687,26 @@ function registerIpc(): void {
             stopRetry();
         }
 
-        return checkAddress(url);
+        const found = await checkAddress(url);
+
+        // A check that finds Pi Pocket clears the error on the Another server choice.
+        if (found.kind === "detected" && gui!.remoteError !== undefined) {
+            gui!.remoteError = undefined;
+            pushConfigState();
+        }
+
+        return found;
+    });
+
+    // The person looks at a side: only that. Nothing connects, disconnects, starts, or stops.
+    handle("config:view", (_event, side) => {
+        if (side !== "local" && side !== "remote") {
+            throw new Error("Not a side");
+        }
+
+        // A Connect under way goes on: the person asked for it.
+        gui!.viewing = side;
+        pushConfigState();
     });
 
     handle("config:save", (_event, input) => {
@@ -1531,6 +1714,8 @@ function registerIpc(): void {
         const before = state.settings;
         const checked = validateSettings(input);
 
+        // The server in use changes only by Connect, Start, or Open, never with a page's copy of the settings.
+        checked.settings.server.mode = before.server.mode;
         state.settings = checked.settings;
         state.problems = checked.problems;
         saveSettings(state.configPath, state.settings);
@@ -1582,6 +1767,8 @@ function registerIpc(): void {
             state.probe = found;
             connect(found.url, found.kind !== "detected");
         } else {
+            state.remoteError = connectFailed(found);
+            state.viewing = "remote";
             showConfig({ kind: "not-detected", probe: found });
         }
 
@@ -1595,7 +1782,7 @@ function registerIpc(): void {
 
         state.connectionAttempt++;
 
-        if (state.loadedUrl !== undefined) {
+        if (canReturn({ inUse: state.settings.server.mode, viewing: state.viewing, loaded: state.loadedUrl !== undefined })) {
             state.reason = { kind: "user" };
             show("server");
         }
@@ -1606,11 +1793,14 @@ function registerIpc(): void {
 
         const state = gui!;
 
-        if (state.settings.server.mode === "local") {
-            if (state.loadedUrl !== undefined) {
+        if (state.viewing === "local") {
+            if (state.settings.server.mode === "local" && state.loadedUrl !== undefined) {
                 state.server.webContents.reload();
                 show("server");
+            } else if (state.localLogin !== undefined) {
+                openLocal(state.localLogin.url, state.localLogin.loginPath, true);
             } else {
+                state.localAsked = true;
                 await state.local!.start();
             }
 
@@ -1643,7 +1833,7 @@ function registerIpc(): void {
     handle("config:update-action", () => gui!.updates?.act());
 
     handle("config:local", (_event, action) => {
-        const actions: LocalAction[] = ["install", "start", "stop", "restart", "open", "check-updates", "show-log", "use-local", "use-remote", "uninstall"];
+        const actions: LocalAction[] = ["install", "start", "stop", "restart", "open", "check-updates", "show-log", "uninstall"];
 
         if (typeof action !== "string" || !(actions as string[]).includes(action)) {
             throw new Error("Not an action");

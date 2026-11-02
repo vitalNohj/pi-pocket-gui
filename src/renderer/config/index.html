@@ -35,8 +35,8 @@
                 <section class="column" id="connection-section" aria-labelledby="connection-heading">
                     <h2 class="section-title" id="connection-heading">Connection</h2>
                     <div class="where" role="radiogroup" aria-label="Where Pi Pocket runs">
-                        <label><input type="radio" name="where" value="local" /><span><strong>This computer</strong><small>Run the server here.</small></span></label>
-                        <label><input type="radio" name="where" value="remote" /><span><strong>Another server</strong><small>Connect to an existing server.</small></span></label>
+                        <label><input type="radio" name="where" value="local" /><span class="choice"><span class="choice-head"><strong>This computer</strong><span id="choice-local" class="pill" data-state="checking" role="status">…</span></span><small>Run the server here.</small><small id="choice-local-error" class="choice-error" hidden></small></span></label>
+                        <label><input type="radio" name="where" value="remote" /><span class="choice"><span class="choice-head"><strong>Another server</strong><span id="choice-remote" class="pill" data-state="checking" role="status">…</span></span><small>Connect to an existing server.</small><small id="choice-remote-error" class="choice-error" hidden></small></span></label>
                     </div>
 
                     <section class="card connection" id="local-card" aria-labelledby="local-title" hidden>

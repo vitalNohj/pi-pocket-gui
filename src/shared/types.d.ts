@@ -248,6 +248,17 @@ export type ConfigReason =
     /** Pi Pocket on this computer is not running yet, or stopped: the screen shows its state. */
     | { kind: "local" };
 
+/** A side of Connection: This computer, or Another server. */
+export type Side = "local" | "remote";
+
+/** The small status on a side's choice at the top of Connection, in the colors of the cards' pills. */
+export interface ChoiceStatus {
+    label: string;
+    state: "connected" | "detected" | "checking" | "other" | "not-detected";
+    /** On an error: one short line under the choice; the card has the whole text. */
+    detail?: string;
+}
+
 /** Where this computer's Pi Pocket stands. */
 export type LocalStatus =
     /** Not installed yet. */
@@ -276,6 +287,8 @@ export interface LocalState {
     status: LocalStatus;
     /** What is happening, or what went wrong, in words. */
     message?: string;
+    /** It stopped on its own: why, in a few words (cleared once it runs, or is stopped, again). */
+    crash?: string;
     /** While installing: the step, and how far a download is. */
     progress?: { step: string; percent?: number };
     /** The versions in use. */
@@ -319,9 +332,17 @@ export interface ConfigState {
     probe?: ProbeResult;
     /** When the next automatic try is, while the server cannot be reached (ms since the epoch). */
     nextRetryAt?: number;
-    /** The address Pi Pocket is open at in the app, while it is (the server's page loaded or loading). */
+    /** The other server Pi Pocket is open at in the app, while it is (the server's page loaded or loading). */
     connectedUrl?: string;
-    /** The server was open before the config screen: the page offers to go back. */
+    /** The side the screen shows. Choosing a side only shows it: it connects, starts, or stops nothing. */
+    viewing: Side;
+    /** The side of the server the window uses (`settings.server.mode`), the one the app opens at its start. */
+    inUse: Side;
+    /** The status on each choice. */
+    choices: Record<Side, ChoiceStatus>;
+    /** The window's connection to another server dropped (it stopped answering, or its page did not load). */
+    disconnected?: { url: string; line: string };
+    /** The server the window uses is loaded, and the screen shows its side: the page offers to go back. */
     canReturn: boolean;
     /** Show the app-owned way back while an unverified webpage (such as a sign-in gateway) is open. */
     recovery: boolean;
@@ -351,8 +372,6 @@ export type LocalAction =
     | "open"
     | "check-updates"
     | "show-log"
-    | "use-local"
-    | "use-remote"
     | "uninstall";
 
 /** A pinned session's state, as the square in Pi Pocket's session list shows it (`data-state`). */
@@ -450,6 +469,8 @@ export interface GuiConfigApi {
     /** Quits and starts the app again (a setting that needs a new window). */
     relaunch(): Promise<void>;
     local(action: LocalAction): Promise<void>;
+    /** Shows a side of Connection. Only that: it connects, starts, or stops nothing. */
+    view(side: Side): Promise<void>;
     /** A folder picked in the system's dialog, or undefined when cancelled. */
     chooseFolder(start: string): Promise<string | undefined>;
     dictation(action: DictationAction): Promise<void>;
