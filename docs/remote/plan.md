@@ -259,6 +259,9 @@ The app itself stays small: Pi Pocket and a Node.js for it are downloaded when f
 5. **Folders, files, git, project context** through the runner.
 6. **Secrets, extension flags, background tasks, the browser** (each can follow on its own).
 
+Upstream (decided 2026-11-02): one issue and one PR to Pi Pocket for the runner, after phase 5 and the Mac test,
+so phases 2 to 5 go together and any changes they need are in it.
+
 ## Open questions
 
 None at the moment.
