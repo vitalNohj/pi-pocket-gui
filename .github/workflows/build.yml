@@ -85,6 +85,11 @@ jobs:
               with:
                   path: dist
                   merge-multiple: true
-            - run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+            - uses: actions/checkout@v4
+              with:
+                  path: source
+                  sparse-checkout: .github/release-notes.md
+            # The notes every release carries (the Windows installer's name), then GitHub's list of changes.
+            - run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --notes-file source/.github/release-notes.md --generate-notes
               env:
                   GH_TOKEN: ${{ github.token }}

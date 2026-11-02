@@ -1,0 +1,1 @@
+**Windows:** the installer is `pi-pocket-gui-win-x64.exe` in every release, without a version in its name, until it is code-signed. Windows Defender can flag an unsigned installer as a false positive; see [the README](https://github.com/vitalNohj/pi-pocket-gui#pi-pocket-for-desktop) for what to do. The app's version is in Settings, under its name.

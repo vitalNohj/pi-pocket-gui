@@ -15,7 +15,7 @@ Pi Pocket installed and kept current for you · a tray with your pinned sessions
 </div>
 
 > [!WARNING]
-> **Windows Defender may block the Windows installer.** It flags `pi-pocket-gui-0.2.6-win-x64.exe` as `Program:Win32/Contebrew.A!ml`, a machine-learning guess (`!ml`), not a match with any known malware. The build isn't code-signed yet. The file has been submitted to Microsoft as a false positive. Until it's cleared: in Windows Security → **Protection history**, open the entry and choose **Allow**, then download it again. The source and the build are public: [the workflow](.github/workflows/build.yml) builds every release.
+> **Windows Defender may block the Windows installer.** It has flagged it as `Program:Win32/Contebrew.A!ml`, a machine-learning guess (`!ml`), not a match with any known malware. The installer isn't code-signed yet, so each new version can be flagged again. Flagged files are submitted to Microsoft as false positives. If it is blocked: in Windows Security → **Protection history**, open the entry and choose **Allow**, then download it again. The source and the build are public: [the workflow](.github/workflows/build.yml) builds every release.
 
 > [!NOTE]
 > **Use this computer from your server with a runner.** Without a runner, Pi uses the server's files and commands. Link this computer to use its files and commands instead. See [Runner](#runner) for setup and access rules.
@@ -44,7 +44,7 @@ Download the app for your computer from [**Releases**](https://github.com/vitalN
 | | File | |
 |---|---|---|
 | **macOS** | `…-mac-arm64.dmg` (Apple Silicon) or `…-mac-x64.dmg` (Intel) | Drag the app into Applications. It is not signed by Apple yet: the first time, right-click it and choose **Open**. If macOS still refuses, use **Open Anyway** in System Settings → Privacy & Security, or run `xattr -cr "/Applications/Pi Pocket.app"`. |
-| **Windows** | `…-win-x64.exe` | SmartScreen warns about an unsigned app: **More info** → **Run anyway**. Defender may block it as a false positive: [see above](#pi-pocket-for-desktop). |
+| **Windows** | `pi-pocket-gui-win-x64.exe` (no version in its name until it is signed) | SmartScreen warns about an unsigned app: **More info** → **Run anyway**. Defender may block it as a false positive: [see above](#pi-pocket-for-desktop). |
 | **Linux** | `…-linux-x86_64.AppImage` or `…-linux-amd64.deb` | Make the AppImage executable and run it, or install the .deb. |
 
 Open the app and pick where Pi Pocket runs:
@@ -107,7 +107,9 @@ Pi Pocket's mic button (and Alt+V) works in the app, recognised on your computer
 
 Words show while you speak and are corrected when you pause (**Words as you speak**; turn it off to save CPU). A model loads at the first dictation and leaves memory after 10 idle minutes. The mic needs Pi Pocket on `127.0.0.1`/`localhost` or `https`: browsers, and so the app, keep the microphone from plain-http pages on other addresses.
 
-### Billion context
+### Billion context (experimental)
+
+This is an experimental feature. I have used it every day for over a month, and I want it available to everybody I made this app for. It can still change.
 
 The **Billion context** card, under **Server tools**, installs [billion-context-pi-pocket-adapter](https://github.com/vitalNohj/billion-context-pi-pocket-adapter) (context compression for long conversations) in the Pi Pocket the app runs on this computer, and turns it on. Pi Pocket must be running.
 
