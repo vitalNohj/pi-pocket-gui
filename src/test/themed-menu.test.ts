@@ -41,7 +41,7 @@ test("the drawn menu is contextMenuTemplate's: same items, same order, same grou
         ["the", "tea", "Add “teh” to dictionary"],
         ["Cut Ctrl+X", "Copy Ctrl+C", "Paste Ctrl+V (off)"],
         ["Select All Ctrl+A"],
-        ["Server settings… Ctrl+,"],
+        ["GUI Settings… Ctrl+,"],
     ]);
     // Every line is the template's item at that index, so a pick runs the template's own item.
     for (const item of themedGroups(template, false).flat()) {
@@ -50,10 +50,10 @@ test("the drawn menu is contextMenuTemplate's: same items, same order, same grou
     }
 });
 
-test("outside a text field only Copy, then Server settings; a pop-out window has no Server settings", () => {
+test("outside a text field only Copy, then GUI Settings; a pop-out window has no GUI Settings", () => {
     assert.deepEqual(lines(contextMenuTemplate(click({ selectionText: "hi" }), { ...noSpelling, openSettings: () => undefined })), [
         ["Copy Ctrl+C"],
-        ["Server settings… Ctrl+,"],
+        ["GUI Settings… Ctrl+,"],
     ]);
     assert.deepEqual(lines(contextMenuTemplate(click({}), noSpelling)), [["Copy Ctrl+C (off)"]]);
     assert.deepEqual(lines(contextMenuTemplate(click({ isEditable: true, misspelledWord: "qzxv" }), noSpelling)), [
@@ -66,7 +66,7 @@ test("outside a text field only Copy, then Server settings; a pop-out window has
 test("macOS shows the command key", () => {
     const template = contextMenuTemplate(click({ isEditable: true }), { ...noSpelling, openSettings: () => undefined });
 
-    assert.deepEqual(lines(template, true), [["Cut ⌘X", "Copy ⌘C", "Paste ⌘V"], ["Select All ⌘A"], ["Server settings… ⌘,"]]);
+    assert.deepEqual(lines(template, true), [["Cut ⌘X", "Copy ⌘C", "Paste ⌘V"], ["Select All ⌘A"], ["GUI Settings… ⌘,"]]);
     assert.equal(acceleratorHint("CommandOrControl+,", true), "⌘,");
     assert.equal(acceleratorHint("CommandOrControl+,", false), "Ctrl+,");
     assert.equal(acceleratorHint("CommandOrControl+Shift+Z", true), "⌘⇧Z");
@@ -83,7 +83,7 @@ test("a pick runs the template's item: its click, or the web contents' edit comm
     const edit = { cut: () => ran.push("cut"), copy: () => ran.push("copy"), paste: () => ran.push("paste"), selectAll: () => ran.push("selectAll") };
     const id = (label: string) => themedGroups(template, false).flat().find((item) => item.label === label)!.id;
 
-    for (const label of ["the", "Add “teh” to dictionary", "Cut", "Copy", "Paste", "Select All", "Server settings…"]) {
+    for (const label of ["the", "Add “teh” to dictionary", "Cut", "Copy", "Paste", "Select All", "GUI Settings…"]) {
         runPicked(template, id(label), edit);
     }
 
@@ -119,7 +119,7 @@ test("a page's own report (macOS): the template's rules, from what the page know
     assert.deepEqual(lines(contextMenuTemplate(pageClickInfo(field, false), { ...noSpelling, openSettings: () => undefined })), [
         ["Cut Ctrl+X (off)", "Copy Ctrl+C (off)", "Paste Ctrl+V (off)"],
         ["Select All Ctrl+A"],
-        ["Server settings… Ctrl+,"],
+        ["GUI Settings… Ctrl+,"],
     ]);
     assert.deepEqual(lines(contextMenuTemplate(pageClickInfo(field, true), noSpelling))[0], ["Cut Ctrl+X (off)", "Copy Ctrl+C (off)", "Paste Ctrl+V"]);
     assert.deepEqual(lines(contextMenuTemplate(pageClickInfo(selected, true), noSpelling)), [["Copy Ctrl+C"]]);
@@ -417,7 +417,7 @@ test("the drawn menu: keys move over the enabled lines, Enter picks, and the foc
     assert.equal(page.menus().length, 1);
     assert.deepEqual(
         page.buttons().map((button) => button.children.map((span) => span.textContent).join(" ")),
-        ["Cut Ctrl+X", "Copy Ctrl+C", "Paste Ctrl+V", "Select All Ctrl+A", "Server settings… Ctrl+,"],
+        ["Cut Ctrl+X", "Copy Ctrl+C", "Paste Ctrl+V", "Select All Ctrl+A", "GUI Settings… Ctrl+,"],
     );
     assert.equal(page.buttons()[0]!.attributes.get("aria-disabled"), "true");
     // Kept inside the window: flipped to the pointer's left and above it.
@@ -495,5 +495,5 @@ test("a disabled line does nothing; a second right-click replaces the open menu"
     assert.equal(await first, null);
     assert.equal(page.menus().length, 1);
     page.buttons()[1]!.click();
-    assert.equal(await second, template.findIndex((item) => item.label === "Server settings…"));
+    assert.equal(await second, template.findIndex((item) => item.label === "GUI Settings…"));
 });

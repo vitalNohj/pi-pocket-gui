@@ -75,7 +75,7 @@ Pi Pocket runs to the window's top edge, and only what sits under the window's b
 
 <img src="docs/images/windows.png" alt="The Windows and Linux layout: minimize, maximize, and close at the top right, with the conversation's border notched around them" width="100%" />
 
-The app tells the page where the buttons are through the [Window Controls Overlay](https://developer.mozilla.org/en-US/docs/Web/API/Window_Controls_Overlay_API), the web's own standard for it. An older Pi Pocket gets a plain band as tall as the buttons. Drag the window by the bar beside them. Server settings → Window → Title bar → **System** brings back the normal title bar, after a restart.
+The app tells the page where the buttons are through the [Window Controls Overlay](https://developer.mozilla.org/en-US/docs/Web/API/Window_Controls_Overlay_API), the web's own standard for it. An older Pi Pocket gets a plain band as tall as the buttons. Drag the window by the bar beside them. GUI Settings → Window → Title bar → **System** brings back the normal title bar, after a restart.
 
 ### See-through background
 
@@ -95,7 +95,7 @@ Change the theme in Pi Pocket and the app follows: the settings screen, the wind
 
 ### Dictation, offline
 
-Pi Pocket's mic button (and Alt+V) works in the app, recognised on your computer: the audio never leaves it. Nothing comes with the app. In **Server settings → Dictation**, pick a speech model and press **Download**; the speech engine ([sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), about 12 MB) comes with the first model. **Remove** deletes a model, and removing the last one deletes the engine too. Every file is checked against its SHA-256 before it is used.
+Pi Pocket's mic button (and Alt+V) works in the app, recognised on your computer: the audio never leaves it. Nothing comes with the app. In **GUI Settings → Dictation**, pick a speech model and press **Download**; the speech engine ([sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), about 12 MB) comes with the first model. **Remove** deletes a model, and removing the last one deletes the engine too. Every file is checked against its SHA-256 before it is used.
 
 | Model | Languages | Download |
 |---|---|---|
@@ -126,7 +126,7 @@ With **Another server**, the card shows the command that installs it on that ser
 
 ### Runner
 
-Use the **Runner** card under **Server tools**, or the **Runner** link at the top of Server settings. A runner lets your server use this computer's files and commands. The agent, models, API keys, and history stay on the server. No SSH or open port is needed.
+Use the **Runner** card under **Server tools**, or the **Runner** link at the top of GUI Settings. A runner lets your server use this computer's files and commands. The agent, models, API keys, and history stay on the server. No SSH or open port is needed.
 
 The app has the same runner as `pi-pocket runner` built in, and links the same way: the server cannot tell them apart.
 
@@ -149,7 +149,7 @@ The server must support runners. For now, use [vitalNohj/pi-pocket](https://gith
 
 ### Settings
 
-Open **Server settings…** from the File menu, tray menu, Pi Pocket menu, or a right-click on the page. You can also press Ctrl+, (⌘, on macOS). This shortcut works even if the server page fails.
+Open **GUI Settings…** from the File menu, tray menu, Pi Pocket menu, or a right-click on the page. You can also press Ctrl+, (⌘, on macOS). This shortcut works even if the server page fails.
 
 The top links go to **Connection**, **App preferences**, **Runner**, and **Server tools**. Connection comes first. App preferences follow, then server tools. Most cards start closed. Each card has a short description. Ports, timeouts, limits, and update intervals are in closed **Advanced** sections.
 
@@ -171,7 +171,7 @@ The two choices at the top, **This computer** and **Another server**, only show 
 
 Use the server address you open in a browser, not a model API address. A failed check keeps your saved address and any working connection. The status shows **Connected** when Pi Pocket is open. To change servers, enter and check the new address before you connect.
 
-If a sign-in page hides Pi Pocket, choose **Open webpage anyway**. This is available only for HTML pages. A **Server settings** button stays visible until Pi Pocket is detected. HTTP errors and other responses return to settings.
+If a sign-in page hides Pi Pocket, choose **Open webpage anyway**. This is available only for HTML pages. A **GUI Settings** button stays visible until Pi Pocket is detected. HTTP errors and other responses return to settings.
 
 <img src="docs/images/settings.png" alt="The settings screen: the connection on the left, the Window settings on the right" width="100%" />
 

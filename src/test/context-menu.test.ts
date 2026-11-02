@@ -32,7 +32,7 @@ test("a misspelled word in a text field: its suggestions first, then add to dict
         "separator",
         "selectAll",
         "separator",
-        "Server settings…",
+        "GUI Settings…",
     ]);
 
     (items[0]!.click as () => void)();

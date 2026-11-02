@@ -60,7 +60,7 @@ export async function probe(input: string, fetcher: Fetch, timeoutMs: number): P
         status: manifest.status,
         canOpen,
         message: canOpen
-            ? "A webpage answered, but Pi Pocket was not detected. If this is your server’s sign-in page, choose Open webpage anyway. Server settings stays available."
+            ? "A webpage answered, but Pi Pocket was not detected. If this is your server’s sign-in page, choose Open webpage anyway. GUI Settings stays available."
             : `The server answered HTTP ${String(manifest.status)}, but Pi Pocket was not detected. Use its browser address, not a model API address. The app has not connected.`,
     };
 }

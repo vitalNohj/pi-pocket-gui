@@ -958,7 +958,7 @@ function show(which: "server" | "config"): void {
     gui.config.setVisible(which === "config" || gui.unverified);
     layout();
     (which === "server" ? gui.server : gui.config).webContents.focus();
-    gui.window.setTitle(which === "server" ? gui.server.webContents.getTitle() || "Pi Pocket" : "Pi Pocket — Server settings");
+    gui.window.setTitle(which === "server" ? gui.server.webContents.getTitle() || "Pi Pocket" : "Pi Pocket — GUI Settings");
     gui.desktop?.visibilityChanged();
     pushConfigState();
 }
@@ -1609,7 +1609,7 @@ function buildMenu(): void {
             submenu: [
                 newSessionMenuItem(() => newSession()),
                 { type: "separator" },
-                { label: "Server settings…", accelerator: "CommandOrControl+,", click: openSettings },
+                { label: "GUI Settings…", accelerator: "CommandOrControl+,", click: openSettings },
                 { type: "separator" },
                 mac ? { role: "close" } : { label: "Quit", accelerator: "CommandOrControl+Q", click: quit },
             ],
