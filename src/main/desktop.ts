@@ -206,7 +206,7 @@ export function setUpDesktop(host: DesktopHost): {
                 ? [{ type: "separator" as const }, { label: "Pinned", enabled: false }, ...pinItems]
                 : []),
             { type: "separator" },
-            { label: "Server settings…", click: host.openSettings },
+            { label: "GUI Settings…", click: host.openSettings },
             { type: "separator" },
             { label: "Quit", click: host.quit },
         ];

@@ -39,7 +39,7 @@ when there is a sensible choice, it is a setting, with a safe default.
 - When the server cannot be reached (at start or when the page fails to load) the config screen shows the error, with
   **Retry**, **Edit connection**, and a background retry that backs off up to 30 s (configurable) and switches back
   to Pi Pocket as soon as it answers.
-- The config screen opens from: Pi Pocket's menu (**Server settings…**, through the bridge), the tray, and the app
+- The config screen opens from: Pi Pocket's menu (**GUI Settings…**, through the bridge), the tray, and the app
   menu. The tray and app menu always work, also on a server without the bridge.
 - Certificates stay strict: a self-signed https server fails like it does in Chrome, and the error shows on the
   config screen.
@@ -48,7 +48,7 @@ when there is a sensible choice, it is a setting, with a safe default.
 
 - Single instance. A second launch focuses the first window.
 - **Tray menu:** Open, the pinned sessions of this GUI (Pi Pocket keeps pins per browser, so the GUI has its own),
-  Server settings…, Quit. Each pin shows the same state as Pi Pocket's sidebar square: working, waiting for you,
+  GUI Settings…, Quit. Each pin shows the same state as Pi Pocket's sidebar square: working, waiting for you,
   failed, finished and unread, read. A click opens that session in the GUI window.
 - **Tray icon and badge** count every session that needs you, as Pi Pocket's home-screen badge does.
 - **Close to tray** (default on). When the desktop has no tray (plain GNOME without AppIndicator), close minimizes, and
@@ -108,7 +108,7 @@ when everything is finished, explaining that it is for this GUI or any other wra
   ```
 
   Pi Pocket uses only the capabilities it finds, and ignores what it does not know.
-- The page shows the wrapper's menu items (a "Desktop" group with **Server settings…**).
+- The page shows the wrapper's menu items (a "Desktop" group with **GUI Settings…**).
 - The server sends push decisions to desktop clients over the live connection.
 - The page reports visibility from the wrapper.
 - A server without the bridge still works in the GUI, with a one-time notice: "This server doesn't support desktop

@@ -440,7 +440,7 @@ export function setUpDictation(host: DictationHost) {
         if (chosen === undefined || !installed.has(chosen.id) || !engineReady) {
             host.needModel();
 
-            return { error: "no speech model is downloaded yet (Server settings → Dictation)" };
+            return { error: "no speech model is downloaded yet (GUI Settings → Dictation)" };
         }
 
         // A dictation still listening (another box): it ends first.

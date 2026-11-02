@@ -32,7 +32,7 @@ if (hello !== null && typeof hello === "object") {
         kind: "pi-pocket-gui",
         apiVersion: API_VERSION,
         capabilities: ["menu", "badge", "notify", "visibility", "pinned", "open", "newSession"],
-        menuItems: () => [{ id: "server-settings", label: "Server settings…", hint: "This desktop app's connection" }],
+        menuItems: () => [{ id: "server-settings", label: "GUI Settings…", hint: "This desktop app's settings" }],
         invoke: (id: unknown) => {
             if (typeof id !== "string") {
                 return false;
