@@ -58,6 +58,139 @@ export function isNewer(candidate: string, current: string): boolean {
     return false;
 }
 
+/** Whether two versions are the same release: "v1.2.3" and "1.2.3" alike. */
+export function sameVersion(a: string, b: string): boolean {
+    return parseVersion(a) !== undefined && parseVersion(b) !== undefined && !isNewer(a, b) && !isNewer(b, a);
+}
+
+/**
+ * What the update button does after it checks the newest release again. Each action checks first: a release found
+ * at the last check can be old by now, and the app must never download, open, or install an old one.
+ */
+export type UpdateStep =
+    /** No release is newer than the running app (also when one was pulled): nothing to do. */
+    | { kind: "current" }
+    /** The check failed: do nothing on old data. The message says so, with the version the app knows. */
+    | { kind: "failed"; message: string }
+    /** page: open the newest release's page. */
+    | { kind: "open-page" }
+    /** download: the disk image already downloaded is still the newest: open it. */
+    | { kind: "open-image" }
+    /** download: download the newest image. `dropOld`: an older image is downloaded; remove it, never open it. */
+    | { kind: "download"; dropOld: boolean }
+    /** install: the update already downloaded is still the newest: ask to restart. */
+    | { kind: "restart" }
+    /** install: electron-updater downloads the newest first, then the app asks to restart. */
+    | { kind: "wait-download" };
+
+export interface RecheckFacts {
+    method: "install" | "download" | "page";
+    /** The running app's version. */
+    running: string;
+    /** The newer version the last check found, if any: the error message names it. */
+    known?: string;
+    /** The version of the update already downloaded and checked, if any. */
+    downloaded?: string;
+    /** The newest release now: its version, undefined when there is none, or the error of the check. */
+    latest: string | undefined | Error;
+}
+
+/** The text for a check that failed: it never lets the person think the version they see is still the newest. */
+export function recheckFailedMessage(error: string, known: string | undefined): string {
+    const reason = error.trim().replace(/\.?$/, ".");
+    const knows = known === undefined ? "" : ` The last version found was ${known}.`;
+
+    return `Could not check for a newer version: ${reason}${knows} Try again when GitHub can be reached.`;
+}
+
+export function nextUpdateStep(facts: RecheckFacts): UpdateStep {
+    const { latest, known } = facts;
+
+    if (latest instanceof Error) {
+        return { kind: "failed", message: recheckFailedMessage(latest.message, known) };
+    }
+
+    if (latest === undefined || !isNewer(latest, facts.running)) {
+        return { kind: "current" };
+    }
+
+    const still = facts.downloaded !== undefined && sameVersion(latest, facts.downloaded);
+
+    switch (facts.method) {
+        case "page":
+            return { kind: "open-page" };
+        case "download":
+            return still ? { kind: "open-image" } : { kind: "download", dropOld: facts.downloaded !== undefined };
+        case "install":
+            return still ? { kind: "restart" } : { kind: "wait-download" };
+    }
+}
+
+/**
+ * A task that runs once at a time: a call while it runs gets the same promise and starts nothing. Two fast clicks on
+ * the update button must not start two downloads.
+ */
+export function singleFlight(task: () => Promise<void>): () => Promise<void> {
+    let running: Promise<void> | undefined;
+
+    return () => {
+        running ??= task().finally(() => {
+            running = undefined;
+        });
+
+        return running;
+    };
+}
+
+/**
+ * install: which electron-updater check its events belong to. electron-updater's events carry no check, and a check that
+ * timed out goes on: its late result must not install or ask to restart, because the action already said it failed.
+ * Each check begins a generation; an action that gives up abandons its generation; events count only while the newest
+ * generation is not abandoned. A new check (background or action) begins a new one, so it owns the result again.
+ */
+export class CheckGenerations {
+    private generation = 0;
+    private abandoned = -1;
+
+    begin(): number {
+        this.generation += 1;
+
+        return this.generation;
+    }
+
+    /** The action that began `token` gave up. A newer check is not touched. */
+    abandon(token: number): void {
+        if (token === this.generation) {
+            this.abandoned = token;
+        }
+    }
+
+    /** Whether events now belong to a check that someone still waits for. */
+    live(): boolean {
+        return this.abandoned !== this.generation;
+    }
+}
+
+/** install: what a downloaded update does. A late result of an abandoned check neither installs on quit nor asks. */
+export function whenDownloaded(facts: { live: boolean; fresh: boolean; acting: boolean }): { installOnQuit: boolean; ask: boolean } {
+    if (!facts.live) {
+        return { installOnQuit: false, ask: false };
+    }
+
+    // A check that finds the same download again does not ask again; a running action asks itself.
+    return { installOnQuit: true, ask: facts.fresh && !facts.acting };
+}
+
+/** The promise, or an error once `ms` pass: a check of the newest release must answer quickly or fail. */
+export function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+    let timer: NodeJS.Timeout | undefined;
+    const late = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`${what} took longer than ${Math.max(1, Math.round(ms / 1000))} seconds.`)), ms);
+    });
+
+    return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+}
+
 /** What the GitHub API's latest release says, as far as this app reads it. */
 export interface ReleaseAsset {
     name: string;
