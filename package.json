@@ -41,6 +41,14 @@
                 "repo": "pi-pocket-gui"
             }
         ],
+        "protocols": [
+            {
+                "name": "Pi Pocket",
+                "schemes": [
+                    "pi-pocket"
+                ]
+            }
+        ],
         "linux": {
             "target": [
                 "AppImage",

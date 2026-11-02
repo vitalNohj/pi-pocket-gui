@@ -31,7 +31,7 @@ if (hello !== null && typeof hello === "object") {
     contextBridge.exposeInMainWorld("pocketHost", {
         kind: "pi-pocket-gui",
         apiVersion: API_VERSION,
-        capabilities: ["menu", "badge", "notify", "visibility", "pinned", "open", "runner"],
+        capabilities: ["menu", "badge", "notify", "visibility", "pinned", "open", "runner", "newSession"],
         menuItems: () => [{ id: "server-settings", label: "Server settings…", hint: "This desktop app's connection" }],
         invoke: (id: unknown) => {
             if (typeof id !== "string") {
@@ -59,9 +59,11 @@ if (hello !== null && typeof hello === "object") {
 
             return ipcRenderer.invoke("host:link-runner", { code }) as Promise<{ ok: boolean; error?: string }>;
         },
-        // One listener: the page's `web/host.js` passes each event on to its own.
-        subscribe: (next: unknown) => {
+        // One listener: the page's `web/host.js` passes each event on to its own. A newer page also names the events
+        // it handles: the app sends one added to version 1 later (newSession) only to a page that named it.
+        subscribe: (next: unknown, events?: unknown) => {
             listener = typeof next === "function" ? (next as (event: HostEvent) => void) : undefined;
+            ipcRenderer.send("host:events", Array.isArray(events) ? events.filter((each) => typeof each === "string") : []);
         },
     });
 
