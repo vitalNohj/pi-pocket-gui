@@ -82,7 +82,8 @@
                 "nsis"
             ],
             "icon": "assets/icon-512.png",
-            "executableName": "pi-pocket-gui"
+            "executableName": "pi-pocket-gui",
+            "artifactName": "pi-pocket-gui-win-${arch}.${ext}"
         },
         "nsis": {
             "oneClick": false,

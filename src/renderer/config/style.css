@@ -535,6 +535,19 @@ summary > h3 {
     gap: 3px;
 }
 
+/* A card title with a pill beside it (Experimental). */
+.title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.title-row .pill {
+    font-size: 11px;
+    padding: 1px 8px;
+}
+
 summary::after {
     content: "›";
     flex: none;
