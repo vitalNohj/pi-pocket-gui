@@ -41,7 +41,7 @@ export function defaultSettings(): Settings {
         appearance: { translucent: false, opacity: 82, macMaterial: "under-window", windowsMaterial: "acrylic", trayMenu: "windows" },
         dictation: { model: "", live: true },
         billionContext: { autoUpdate: false },
-        runner: { enabled: true },
+        runner: { enabled: true, confirmSessions: true },
     };
 }
 
@@ -171,7 +171,7 @@ const schema: { [S in keyof Settings]: { [K in keyof Settings[S]]: Check<Setting
         live: bool,
     },
     billionContext: { autoUpdate: bool },
-    runner: { enabled: bool },
+    runner: { enabled: bool, confirmSessions: bool },
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {

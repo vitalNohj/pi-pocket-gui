@@ -921,6 +921,12 @@ button.danger {
     overflow-wrap: anywhere;
 }
 
+/* Keep a runner command error readable in a narrow card. */
+#runner-confirm-error {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 .security-note {
     padding: 10px 12px;
     margin: 0 0 12px;

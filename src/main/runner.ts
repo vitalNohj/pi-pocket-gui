@@ -19,6 +19,18 @@ import { cleanLine } from "./local-versions";
 export const STOPPED_BY_SERVER = 3;
 const LOG_LINES = 200;
 const STOP_LIMIT_MS = 5000;
+const LEGACY_EXIT_MS = 5000;
+const LEGACY_WARNING = "This runner does not support session confirmation. Update Pi Pocket to ask before new sessions.";
+
+/** One request from the runner's stdout; ids belong to that runner process only. */
+export interface RunnerConfirmation {
+    id: number;
+    server: string;
+    computer: string;
+    person: string;
+    folder: string;
+    kind: "new" | "fork";
+}
 
 export interface RunnerHost {
     /** Where the link and its log go. */
@@ -27,6 +39,9 @@ export interface RunnerHost {
     /** Whether the person wants it running (the settings' runner.enabled). */
     enabled: () => boolean;
     setEnabled: (enabled: boolean) => Promise<void>;
+    confirmSessions: () => boolean;
+    /** Show one question. Aborting the signal must close it. Errors deny the request. */
+    ask: (request: RunnerConfirmation, signal: AbortSignal) => Promise<boolean>;
     /** The installed runtime to run it from; undefined when there is none with the runner. */
     runtime: () => { node: string; launcher: string; bin: string } | undefined;
     /** Install Pi Pocket on this computer, or update it, so a runtime has the runner. */
@@ -67,6 +82,12 @@ export function setUpRunner(host: RunnerHost) {
     let quitting = false;
     /** A step (linking, unlinking) stopped it on purpose: what it does next is the step's to decide. */
     let holding = false;
+    let starting: Promise<void> | undefined;
+    let generation = 0;
+    let cancelQuestions: (() => void) | undefined;
+    let legacyLauncher: string | undefined;
+    let confirmError: string | undefined;
+    let confirmationSync = Promise.resolve();
 
     const readLink = (): Link | undefined => {
         try {
@@ -131,10 +152,31 @@ export function setUpRunner(host: RunnerHost) {
         });
     };
 
-    const start = async (): Promise<void> => {
-        clearTimeout(restartTimer);
+    /** Serialize writes so a quick second setting change is always applied last. No link yet is not an error. */
+    const syncConfirmation = (): Promise<void> => {
+        confirmationSync = confirmationSync.then(async () => {
+            if (readLink() === undefined) {
+                return;
+            }
 
-        if (child !== undefined || quitting || !host.enabled()) {
+            try {
+                await runOnce(["settings", "confirm", host.confirmSessions() ? "on" : "off"]);
+                confirmError = undefined;
+            } catch (error) {
+                confirmError = `Could not set session confirmation: ${(error as Error).message}`;
+                log(confirmError);
+            }
+
+            host.changed();
+        });
+
+        return confirmationSync;
+    };
+
+    const startRunner = async (): Promise<void> => {
+        const attempt = generation;
+
+        if (child !== undefined || quitting || holding || !host.enabled()) {
             return;
         }
 
@@ -154,29 +196,126 @@ export function setUpRunner(host: RunnerHost) {
             return;
         }
 
+        await syncConfirmation();
         const env = await host.environment();
         const separator = host.platform === "win32" ? ";" : ":";
 
-        if (child !== undefined || quitting || !host.enabled()) {
+        if (attempt !== generation || child !== undefined || quitting || holding || !host.enabled()) {
             return;
         }
 
         log(`— ${new Date().toISOString()} runner for ${link.server}, as "${link.name}"`);
         set("connecting", `Connecting to ${link.server}…`);
 
-        const proc = spawn(runtime.node, [runtime.launcher, "runner", "--config", linkFile], {
+        const usesConfirmation = legacyLauncher !== runtime.launcher;
+        const began = Date.now();
+        let unknownOption = false;
+        const proc = spawn(runtime.node, [runtime.launcher, "runner", ...(usesConfirmation ? ["--confirm-via", "stdio"] : []), "--config", linkFile], {
             cwd: homedir(),
             // The person's tools first, as in their terminal; the runtime's Node and npm after.
             env: { ...env, PATH: `${env.PATH ?? ""}${separator}${runtime.bin}`, NO_COLOR: "1", PI_POCKET_DESKTOP_APP: "1" },
-            stdio: ["ignore", "pipe", "pipe"],
+            stdio: ["pipe", "pipe", "pipe"],
             windowsHide: true,
         });
 
         child = proc;
         runningFrom = runtime.launcher;
 
+        const questions = new Map<number, { request: RunnerConfirmation; controller: AbortController }>();
+        const queue: number[] = [];
+        let asking = false;
+        const cancelPending = () => {
+            for (const question of questions.values()) {
+                question.controller.abort();
+            }
+
+            questions.clear();
+            queue.length = 0;
+        };
+
+        cancelQuestions = cancelPending;
+
+        const askNext = async (): Promise<void> => {
+            if (asking) {
+                return;
+            }
+
+            asking = true;
+
+            try {
+                while (queue.length > 0) {
+                    const id = queue.shift()!;
+                    const question = questions.get(id);
+
+                    if (question === undefined) {
+                        continue;
+                    }
+
+                    let allow = false;
+
+                    try {
+                        allow = await host.ask(question.request, question.controller.signal) === true;
+                    } catch (error) {
+                        log(`Could not ask about the session: ${(error as Error).message}`);
+                    }
+
+                    // END, stop, or a new process makes even a late Allow have no effect.
+                    if (questions.get(id) === question && !question.controller.signal.aborted && child === proc && proc.stdin.writable) {
+                        proc.stdin.write(`${JSON.stringify({ id, allow })}\n`);
+                    }
+
+                    if (questions.get(id) === question) {
+                        questions.delete(id);
+                    }
+                }
+            } finally {
+                asking = false;
+            }
+        };
+
+        const confirmationLine = (line: string): boolean => {
+            const end = line.startsWith("PI-POCKET-CONFIRM-END ");
+            const prefix = end ? "PI-POCKET-CONFIRM-END " : "PI-POCKET-CONFIRM ";
+
+            if (!line.startsWith(prefix)) {
+                return false;
+            }
+
+            if (child !== proc || quitting || status === "stopping") {
+                return true;
+            }
+
+            try {
+                const value: unknown = JSON.parse(line.slice(prefix.length));
+
+                if (!isConfirmationId(value)) {
+                    throw new Error("invalid id");
+                }
+
+                if (end) {
+                    const question = questions.get(value.id);
+
+                    questions.delete(value.id);
+                    question?.controller.abort();
+                } else if (isConfirmation(value)) {
+                    if (!questions.has(value.id)) {
+                        questions.set(value.id, { request: value, controller: new AbortController() });
+                        queue.push(value.id);
+                        void askNext();
+                    }
+                } else {
+                    throw new Error("invalid request");
+                }
+            } catch {
+                log("Ignored an invalid session confirmation line.");
+            }
+
+            return true;
+        };
+
         const onLine = (line: string) => {
             log(line);
+            unknownOption ||= /unknown (?:option|command)\b/i.test(plain(line));
 
             if (child !== proc) {
                 return;
@@ -186,22 +325,30 @@ export function setUpRunner(host: RunnerHost) {
                 failures = 0;
                 set("connected");
             } else if (/\] Disconnected/.test(line)) {
+                cancelPending();
                 set("connecting", "Reconnecting. Sessions must wait for the server.");
             } else if (/\] Connection: /.test(line) && status !== "connected") {
                 set("connecting", plain(line).replace(/^\[[^\]]*\] Connection: /, "Cannot reach the server: "));
             }
         };
 
-        readLines(proc.stdout, onLine);
+        readLines(proc.stdout, (line) => {
+            if (!confirmationLine(line)) {
+                onLine(line);
+            }
+        });
         readLines(proc.stderr, onLine);
+        proc.stdin.on("error", (error) => log(`Could not answer the session question: ${error.message}`));
         proc.on("error", (error) => log(`Could not start: ${error.message}`));
         proc.on("close", (code, signal) => {
+            cancelPending();
             if (child !== proc) {
                 return;
             }
 
             child = undefined;
             runningFrom = undefined;
+            cancelQuestions = undefined;
 
             if (quitting || status === "stopping" || !host.enabled()) {
                 set(readLink() === undefined ? "unlinked" : "off");
@@ -210,6 +357,14 @@ export function setUpRunner(host: RunnerHost) {
                 if (!quitting && !holding && host.enabled()) {
                     void start();
                 }
+
+                return;
+            }
+
+            if (code !== STOPPED_BY_SERVER && usesConfirmation && unknownOption && Date.now() - began <= LEGACY_EXIT_MS) {
+                legacyLauncher = runtime.launcher;
+                log("This runner does not support --confirm-via; retrying without the flag.");
+                void start();
 
                 return;
             }
@@ -230,8 +385,21 @@ export function setUpRunner(host: RunnerHost) {
         });
     };
 
+    /** Coalesce starts while the link setting and environment are being read. */
+    const start = (): Promise<void> => {
+        clearTimeout(restartTimer);
+        starting ??= startRunner().finally(() => {
+            starting = undefined;
+        });
+
+        return starting;
+    };
+
     const stop = async (): Promise<void> => {
         clearTimeout(restartTimer);
+        generation += 1;
+        cancelQuestions?.();
+        await starting;
         const proc = child;
 
         if (proc === undefined || proc.exitCode !== null) {
@@ -274,6 +442,7 @@ export function setUpRunner(host: RunnerHost) {
     return {
         state(): RunnerState {
             const link = readLink();
+            const confirmationProblem = confirmError ?? (legacyLauncher !== undefined && legacyLauncher === host.runtime()?.launcher ? LEGACY_WARNING : undefined);
 
             return {
                 status,
@@ -281,6 +450,7 @@ export function setUpRunner(host: RunnerHost) {
                 ...(link === undefined ? {} : { link }),
                 ...(busy === undefined ? {} : { busy }),
                 enabled: host.enabled(),
+                ...(confirmationProblem === undefined ? {} : { confirmError: confirmationProblem }),
                 available: host.runtime() !== undefined,
                 computerName: computerName(),
                 log: lines.slice(-40),
@@ -322,6 +492,7 @@ export function setUpRunner(host: RunnerHost) {
                     busy = "Linking this computer…";
                     host.changed();
                     log(await runOnce(["link", server, code]));
+                    await syncConfirmation();
                     failures = 0;
                     await host.setEnabled(true);
                 } finally {
@@ -337,7 +508,9 @@ export function setUpRunner(host: RunnerHost) {
 
                 try {
                     await stop();
+                    await confirmationSync;
                     await rm(linkFile, { force: true });
+                    confirmError = undefined;
                     set("unlinked");
                 } finally {
                     holding = false;
@@ -355,10 +528,14 @@ export function setUpRunner(host: RunnerHost) {
                 void stop().then(() => {
                     if (!host.enabled()) {
                         set(readLink() === undefined ? "unlinked" : "off");
+                    } else if (!quitting && !holding) {
+                        void start();
                     }
                 });
             }
         },
+        /** The setting already changed. The runner reads the saved choice for each request; keep it running. */
+        confirmChanged: syncConfirmation,
         restart: async (): Promise<void> => {
             await stop();
             failures = 0;
@@ -380,6 +557,17 @@ export function setUpRunner(host: RunnerHost) {
             await stop();
         },
     };
+}
+
+function isConfirmationId(value: unknown): value is { id: number } {
+    return typeof value === "object" && value !== null && "id" in value && Number.isSafeInteger(value.id) && (value.id as number) >= 0;
+}
+
+function isConfirmation(value: { id: number }): value is RunnerConfirmation {
+    const request = value as Partial<RunnerConfirmation>;
+
+    return typeof request.server === "string" && typeof request.computer === "string" && typeof request.person === "string"
+        && typeof request.folder === "string" && (request.kind === "new" || request.kind === "fork");
 }
 
 function readLines(stream: NodeJS.ReadableStream, listener: (line: string) => void): void {

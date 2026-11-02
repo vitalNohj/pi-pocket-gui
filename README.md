@@ -126,6 +126,8 @@ Use the **Runner** card under **Server tools**, or the **Runner** link at the to
 2. Under **Menu → Runners**, choose **New session** on this computer and pick a folder. The session title shows which computer it uses.
 3. Keep the app open, including in the tray. The **Runner** card shows the connection state. Use **Enable runner**, **Reconnect**, or **Unlink** to manage the link.
 
+By default, the app asks before the server starts a new session or a copy of a session on this computer. The question shows the server, person, and folder; **Deny** is the default. A session can read and change files and run commands as you, also outside that folder. Turn off **Ask before new sessions** in the **Runner** card to start sessions without asking. The app saves the choice with `runner settings confirm on|off --config FILE`; no runner restart is needed. This needs a runner with session confirmation support; the card shows an error for an older runner.
+
 When the runner is off or the app is closed, the server shows this computer as offline. Its sessions cannot use tools here until it reconnects. Running commands continue through a connection drop of up to 2 minutes.
 
 **Link another computer:** open that section in the Runner card. On the server, choose **Menu → Runners → Link a computer**, then **Link another computer**. In a browser, choose **Make a link code** instead. The code expires after 10 minutes. On the other computer, install Node.js 22.19 or newer, then run:

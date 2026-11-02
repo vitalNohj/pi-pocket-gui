@@ -50,6 +50,7 @@ import { setUpDesktop } from "./desktop";
 import { setUpDictation } from "./dictation";
 import { ADAPTER, ADAPTER_PAGE, setUpBillionContext } from "./billion-context";
 import { computerName, setUpRunner } from "./runner";
+import { askRunnerSession } from "./runner-dialog";
 import { setUpLocalServer } from "./local-server";
 import { setUpUpdates } from "./updates";
 import { setLaunchAtLogin, startedAtLogin, trayAvailable } from "./platform";
@@ -361,11 +362,13 @@ async function start(): Promise<void> {
         home: join(app.getPath("userData"), "runner"),
         platform: process.platform,
         enabled: () => gui!.settings.runner.enabled,
+        confirmSessions: () => gui!.settings.runner.confirmSessions,
+        ask: (request, signal) => askRunnerSession(window, request, signal),
         setEnabled: async (enabled) => {
             const state = gui!;
 
             if (state.settings.runner.enabled !== enabled) {
-                state.settings = { ...state.settings, runner: { enabled } };
+                state.settings = { ...state.settings, runner: { ...state.settings.runner, enabled } };
                 saveSettings(state.configPath, state.settings);
             }
         },
@@ -1535,6 +1538,10 @@ function registerIpc(): void {
         state.updates?.reschedule();
         state.local?.rescheduleUpdates();
         state.billionContext?.reschedule();
+
+        if (before.runner.confirmSessions !== state.settings.runner.confirmSessions) {
+            void state.runner?.confirmChanged();
+        }
 
         if (before.runner.enabled !== state.settings.runner.enabled) {
             state.runner?.enabledChanged();

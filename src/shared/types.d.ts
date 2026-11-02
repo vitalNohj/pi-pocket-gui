@@ -123,6 +123,8 @@ export interface Settings {
     runner: {
         /** Run `pi-pocket runner` while the app runs, once this computer is linked. */
         enabled: boolean;
+        /** Ask on this computer before the server starts a new session or a fork. */
+        confirmSessions: boolean;
     };
 }
 
@@ -140,6 +142,8 @@ export interface RunnerState {
     /** A step under way (installing Pi Pocket for it, linking). */
     busy?: string;
     enabled: boolean;
+    /** The confirmation setting could not be applied, or this runner does not support it. */
+    confirmError?: string;
     /** An installed Pi Pocket on this computer has the runner. */
     available: boolean;
     /** The name this computer suggests for itself. */
