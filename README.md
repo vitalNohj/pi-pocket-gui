@@ -138,14 +138,7 @@ The runner sends this computer's key and every command to the server, so it uses
 
 When the runner is off or the app is closed, the server shows this computer as offline. Its sessions cannot use tools here until it reconnects. Running commands continue through a connection drop of up to 2 minutes.
 
-**Link another computer:** open that section in the Runner card. On the server, choose **Menu → Runners → Link a computer**, then **Link another computer**. In a browser, choose **Make a link code** instead. The code expires after 10 minutes. On the other computer, install Node.js 22.19 or newer, then run:
-
-```sh
-npm install -g https://codeload.github.com/vitalNohj/pi-pocket/tar.gz/live-0.28
-pi-pocket runner serve
-```
-
-Enter the server address and link code when asked. On Linux, the runner offers to start as a service at login. Run the command again to use the saved link.
+**Link another computer:** in Pi Pocket, choose **Menu → Runners → Link a computer**. It shows the install command, the runner command, and a one-time code. That computer does not need this app.
 
 **Access:** only you can start sessions on a computer you linked. These sessions are private by default. The server owner can enable **Share sessions on linked computers** under **Menu → Runners**. Anyone who can prompt a shared session can run commands on that computer.
 
