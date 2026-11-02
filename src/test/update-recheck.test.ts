@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { nextUpdateStep, recheckFailedMessage, sameVersion, singleFlight, withTimeout, type RecheckFacts } from "../main/update-pick";
+import { CheckGenerations, nextUpdateStep, whenDownloaded, recheckFailedMessage, sameVersion, singleFlight, withTimeout, type RecheckFacts } from "../main/update-pick";
 
 const offline = new Error("net::ERR_INTERNET_DISCONNECTED");
 
@@ -98,4 +98,35 @@ test("two fast clicks run the action once", async () => {
 test("a slow check fails instead of hanging", async () => {
     await assert.rejects(withTimeout(new Promise(() => undefined), 20, "The check"), /The check took longer than 1 seconds/);
     assert.equal(await withTimeout(Promise.resolve(5), 1000, "The check"), 5);
+});
+
+test("install: a late result of a check that timed out neither installs on quit nor asks to restart", () => {
+    const generations = new CheckGenerations();
+    const token = generations.begin();
+
+    // The action gave up: the check goes on in electron-updater and finishes later.
+    generations.abandon(token);
+    assert.equal(generations.live(), false);
+    assert.deepEqual(whenDownloaded({ live: generations.live(), fresh: true, acting: false }), { installOnQuit: false, ask: false });
+
+    // The next check (background or a new action) owns the result again.
+    const next = generations.begin();
+
+    assert.equal(generations.live(), true);
+    // An old token does not abandon the newer check.
+    generations.abandon(token);
+    assert.equal(generations.live(), true);
+    generations.abandon(next);
+    assert.equal(generations.live(), false);
+});
+
+test("install: a background check still downloads, installs on quit, and asks to restart", () => {
+    const generations = new CheckGenerations();
+
+    generations.begin();
+    assert.deepEqual(whenDownloaded({ live: generations.live(), fresh: true, acting: false }), { installOnQuit: true, ask: true });
+    // The same download found again does not ask again.
+    assert.deepEqual(whenDownloaded({ live: true, fresh: false, acting: false }), { installOnQuit: true, ask: false });
+    // A running action asks itself, once it knows the newest version is here.
+    assert.deepEqual(whenDownloaded({ live: true, fresh: true, acting: true }), { installOnQuit: true, ask: false });
 });

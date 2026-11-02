@@ -20,6 +20,7 @@ import { app, dialog, net, Notification, shell, type BaseWindow } from "electron
 import type { Settings, UpdateState } from "../shared/types";
 import { downloadChecked } from "./download";
 import {
+    CheckGenerations,
     isNewer,
     macImage,
     nextUpdateStep,
@@ -28,6 +29,7 @@ import {
     sha256Of,
     singleFlight,
     updateMethod,
+    whenDownloaded,
     withTimeout,
     type Release,
     type UpdateMethod,
@@ -98,6 +100,8 @@ export function setUpUpdates(host: UpdateHost): {
     let readyVersion: string | undefined;
     /** install: an action of the update button runs; it asks to restart itself, once the newest version is here. */
     let acting = false;
+    /** install: a late result of a check that an action gave up on must not install or ask to restart. */
+    const generations = new CheckGenerations();
     let timer: NodeJS.Timeout | undefined;
     let told: string | undefined;
     // Loaded only where it installs: elsewhere it is never needed, and on macOS it would find no update it can use.
@@ -148,6 +152,14 @@ export function setUpUpdates(host: UpdateHost): {
                 // A newer one replaces it: the older download must not install when the app quits meanwhile.
                 readyVersion = undefined;
                 autoUpdater.autoInstallOnAppQuit = false;
+            }
+
+            // A late result of an abandoned check: the card keeps saying that the check failed.
+            if (!generations.live()) {
+                return;
+            }
+
+            if (info.version !== readyVersion) {
                 set({ status: "downloading", version: info.version, percent: 0 });
             }
 
@@ -157,22 +169,37 @@ export function setUpUpdates(host: UpdateHost): {
             // A release newer than this app is gone (it was pulled): its download must not install when the app quits.
             readyVersion = undefined;
             autoUpdater.autoInstallOnAppQuit = false;
-            set({ status: "current", checkedAt: Date.now() });
+
+            if (generations.live()) {
+                set({ status: "current", checkedAt: Date.now() });
+            }
         });
-        autoUpdater.on("download-progress", (progress) => set({ status: "downloading", percent: Math.floor(progress.percent) }));
+        autoUpdater.on("download-progress", (progress) => {
+            if (generations.live()) {
+                set({ status: "downloading", percent: Math.floor(progress.percent) });
+            }
+        });
         autoUpdater.on("update-downloaded", (info) => {
-            const fresh = info.version !== readyVersion;
+            const next = whenDownloaded({ live: generations.live(), fresh: info.version !== readyVersion, acting });
+
+            // Abandoned: the file stays in electron-updater's cache, unused. The next check finds it again and owns it.
+            if (!next.installOnQuit) {
+                return;
+            }
 
             readyVersion = info.version;
             autoUpdater.autoInstallOnAppQuit = true;
             set({ status: "ready", version: info.version, checkedAt: Date.now() });
 
-            // A check that finds the same download again does not ask again.
-            if (fresh && !acting) {
+            if (next.ask) {
                 void askToRestart(info.version);
             }
         });
-        autoUpdater.on("error", (error) => set({ status: "error", message: error.message, checkedAt: Date.now() }));
+        autoUpdater.on("error", (error) => {
+            if (generations.live()) {
+                set({ status: "error", message: error.message, checkedAt: Date.now() });
+            }
+        });
         updater = autoUpdater;
 
         return autoUpdater;
@@ -308,7 +335,10 @@ export function setUpUpdates(host: UpdateHost): {
 
         try {
             if (method === "install") {
-                await (await setUpUpdater()).checkForUpdates();
+                const autoUpdater = await setUpUpdater();
+
+                generations.begin();
+                await autoUpdater.checkForUpdates();
             } else {
                 await checkRelease();
             }
@@ -361,10 +391,13 @@ export function setUpUpdates(host: UpdateHost): {
         set({ status: "checking" });
 
         let result: Awaited<ReturnType<typeof autoUpdater.checkForUpdates>>;
+        const token = generations.begin();
 
         try {
             result = await withTimeout(autoUpdater.checkForUpdates(), RECHECK_MS, "The check for a newer version");
         } catch (error) {
+            // The check goes on in electron-updater: its late result must not install or ask.
+            generations.abandon(token);
             set({ status: "error", message: recheckFailedMessage((error as Error).message, known), checkedAt: Date.now() });
 
             return;

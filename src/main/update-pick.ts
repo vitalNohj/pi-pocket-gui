@@ -142,6 +142,45 @@ export function singleFlight(task: () => Promise<void>): () => Promise<void> {
     };
 }
 
+/**
+ * install: which electron-updater check its events belong to. electron-updater's events carry no check, and a check that
+ * timed out goes on: its late result must not install or ask to restart, because the action already said it failed.
+ * Each check begins a generation; an action that gives up abandons its generation; events count only while the newest
+ * generation is not abandoned. A new check (background or action) begins a new one, so it owns the result again.
+ */
+export class CheckGenerations {
+    private generation = 0;
+    private abandoned = -1;
+
+    begin(): number {
+        this.generation += 1;
+
+        return this.generation;
+    }
+
+    /** The action that began `token` gave up. A newer check is not touched. */
+    abandon(token: number): void {
+        if (token === this.generation) {
+            this.abandoned = token;
+        }
+    }
+
+    /** Whether events now belong to a check that someone still waits for. */
+    live(): boolean {
+        return this.abandoned !== this.generation;
+    }
+}
+
+/** install: what a downloaded update does. A late result of an abandoned check neither installs on quit nor asks. */
+export function whenDownloaded(facts: { live: boolean; fresh: boolean; acting: boolean }): { installOnQuit: boolean; ask: boolean } {
+    if (!facts.live) {
+        return { installOnQuit: false, ask: false };
+    }
+
+    // A check that finds the same download again does not ask again; a running action asks itself.
+    return { installOnQuit: true, ask: facts.fresh && !facts.acting };
+}
+
 /** The promise, or an error once `ms` pass: a check of the newest release must answer quickly or fail. */
 export function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
     let timer: NodeJS.Timeout | undefined;
