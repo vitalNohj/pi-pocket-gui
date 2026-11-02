@@ -8,19 +8,38 @@
  *   for this Mac, checks it against GitHub's checksum, opens it, and quits: macOS cannot replace a running app, so the
  *   person drags the new one over the old one only once this one is gone.
  * - page: a Linux .deb opens the release page. source: a checkout run with `npm start` says to `git pull`.
+ *
+ * Each action (the Updates card's button, the tray item, the notification) first asks for the newest release again,
+ * so it never downloads, opens, or installs a version that a newer release replaced after the last check. When that
+ * check fails, the action does nothing and the card says so (`nextUpdateStep` in update-pick.ts decides).
  */
 import { execFile } from "node:child_process";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { app, dialog, net, Notification, shell, type BaseWindow } from "electron";
 import type { Settings, UpdateState } from "../shared/types";
 import { downloadChecked } from "./download";
-import { isNewer, macImage, readRelease, sha256Of, updateMethod, type Release, type UpdateMethod } from "./update-pick";
+import {
+    isNewer,
+    macImage,
+    nextUpdateStep,
+    readRelease,
+    recheckFailedMessage,
+    sha256Of,
+    singleFlight,
+    updateMethod,
+    withTimeout,
+    type Release,
+    type UpdateMethod,
+} from "./update-pick";
 
 const REPO = "vitalNohj/pi-pocket-gui";
 const LATEST = `https://api.github.com/repos/${REPO}/releases/latest`;
 const RELEASES = `https://github.com/${REPO}/releases`;
 /** The first check waits a little after start, so it never slows the window down. */
 const FIRST_CHECK_MS = 15_000;
+/** How long the check before an action may take: the person waits for it, so it fails rather than hangs. */
+const RECHECK_MS = 10_000;
 
 export interface UpdateHost {
     assets: string;
@@ -56,7 +75,10 @@ function teamSigned(): Promise<boolean> {
 export function setUpUpdates(host: UpdateHost): {
     state: () => UpdateState;
     check: (manual: boolean) => Promise<void>;
-    /** The next step for an update found: download, install, or open its page. */
+    /**
+     * The next step for an update found: download, install, or open its page. It checks the newest release first, so it
+     * never acts on a release that a newer one replaced since the last check. A call while one runs does nothing more.
+     */
     act: () => Promise<void>;
     /** The settings changed: the timer follows them. */
     reschedule: () => void;
@@ -70,7 +92,12 @@ export function setUpUpdates(host: UpdateHost): {
     });
     let state: UpdateState = { method, status: "idle" };
     let release: Release | undefined;
-    let downloaded: string | undefined;
+    /** download: the disk image downloaded and checked, and its version. */
+    let downloaded: { version: string; path: string } | undefined;
+    /** install: the version electron-updater has downloaded, ready to install on restart. */
+    let readyVersion: string | undefined;
+    /** install: an action of the update button runs; it asks to restart itself, once the newest version is here. */
+    let acting = false;
     let timer: NodeJS.Timeout | undefined;
     let told: string | undefined;
     // Loaded only where it installs: elsewhere it is never needed, and on macOS it would find no update it can use.
@@ -116,14 +143,34 @@ export function setUpUpdates(host: UpdateHost): {
         autoUpdater.allowPrerelease = false;
         autoUpdater.logger = null;
         autoUpdater.on("update-available", (info) => {
-            set({ status: "downloading", version: info.version, percent: 0 });
+            // The version already downloaded is still the newest: electron-updater only finds its file again.
+            if (info.version !== readyVersion) {
+                // A newer one replaces it: the older download must not install when the app quits meanwhile.
+                readyVersion = undefined;
+                autoUpdater.autoInstallOnAppQuit = false;
+                set({ status: "downloading", version: info.version, percent: 0 });
+            }
+
             notifyAvailable(info.version);
         });
-        autoUpdater.on("update-not-available", () => set({ status: "current", checkedAt: Date.now() }));
+        autoUpdater.on("update-not-available", () => {
+            // A release newer than this app is gone (it was pulled): its download must not install when the app quits.
+            readyVersion = undefined;
+            autoUpdater.autoInstallOnAppQuit = false;
+            set({ status: "current", checkedAt: Date.now() });
+        });
         autoUpdater.on("download-progress", (progress) => set({ status: "downloading", percent: Math.floor(progress.percent) }));
         autoUpdater.on("update-downloaded", (info) => {
+            const fresh = info.version !== readyVersion;
+
+            readyVersion = info.version;
+            autoUpdater.autoInstallOnAppQuit = true;
             set({ status: "ready", version: info.version, checkedAt: Date.now() });
-            void askToRestart(info.version);
+
+            // A check that finds the same download again does not ask again.
+            if (fresh && !acting) {
+                void askToRestart(info.version);
+            }
         });
         autoUpdater.on("error", (error) => set({ status: "error", message: error.message, checkedAt: Date.now() }));
         updater = autoUpdater;
@@ -142,7 +189,8 @@ export function setUpUpdates(host: UpdateHost): {
             cancelId: 1,
         });
 
-        if (response === 0) {
+        // A newer version may have replaced this one while the question was open: never install the older one.
+        if (response === 0 && readyVersion === version) {
             host.quitting();
             updater?.quitAndInstall();
         }
@@ -186,36 +234,54 @@ export function setUpUpdates(host: UpdateHost): {
             cancelId: 1,
         });
 
-        if (response === 0) {
+        // A check while the question was open can have dropped the image for a newer release: never open it then.
+        if (response === 0 && downloaded?.path === image) {
             await openAndQuit(image);
         }
     };
 
-    const checkRelease = async (): Promise<void> => {
+    /** GitHub's latest release now, or undefined when there is none. Throws when GitHub cannot be asked. */
+    const latestRelease = async (): Promise<Release | undefined> => {
         const response = await net.fetch(LATEST, {
             headers: { accept: "application/vnd.github+json", "user-agent": `pi-pocket-gui/${app.getVersion()}` },
+            cache: "no-store",
         });
 
         if (response.status === 404) {
-            set({ status: "current", checkedAt: Date.now() });
-
-            return;
+            return undefined;
         }
 
         if (!response.ok) {
             throw new Error(`GitHub answered HTTP ${response.status}.`);
         }
 
-        const found = readRelease(await response.json());
+        return readRelease(await response.json());
+    };
+
+    /** Forgets the downloaded disk image and removes it: it is not the newest release, so it must never open. */
+    const dropImage = async (): Promise<void> => {
+        const old = downloaded;
+
+        downloaded = undefined;
+
+        if (old !== undefined) {
+            await rm(old.path, { force: true }).catch(() => undefined);
+        }
+    };
+
+    const checkRelease = async (): Promise<void> => {
+        const found = await latestRelease();
 
         if (found === undefined || !isNewer(found.version, app.getVersion())) {
+            release = undefined;
+            await dropImage();
             set({ status: "current", checkedAt: Date.now() });
 
             return;
         }
 
-        if (release?.version !== found.version) {
-            downloaded = undefined;
+        if (downloaded !== undefined && downloaded.version !== found.version) {
+            await dropImage();
         }
 
         release = found;
@@ -238,10 +304,6 @@ export function setUpUpdates(host: UpdateHost): {
             return;
         }
 
-        if (method === "install" && state.status === "ready") {
-            return;
-        }
-
         set({ status: "checking" });
 
         try {
@@ -255,40 +317,13 @@ export function setUpUpdates(host: UpdateHost): {
         }
     };
 
-    const act = async (): Promise<void> => {
-        if (method === "install") {
-            if (state.status === "ready" && state.version !== undefined) {
-                await askToRestart(state.version);
-            } else {
-                await check(true);
-            }
-
-            return;
-        }
-
-        if (release === undefined) {
-            await check(true);
-
-            return;
-        }
-
-        if (method === "page") {
-            void shell.openExternal(release.page);
-
-            return;
-        }
-
-        // download: the disk image for this Mac.
-        if (downloaded !== undefined) {
-            await openAndQuit(downloaded);
-
-            return;
-        }
-
-        const image = macImage(release, process.arch);
+    /** Downloads the disk image of `latest` for this Mac, then offers to open it. */
+    const downloadImage = async (latest: Release): Promise<void> => {
+        const image = macImage(latest, process.arch);
 
         if (image === undefined) {
-            void shell.openExternal(release.page);
+            set({ status: "available" });
+            void shell.openExternal(latest.page);
 
             return;
         }
@@ -297,8 +332,7 @@ export function setUpUpdates(host: UpdateHost): {
 
         try {
             const sha256 = sha256Of(image);
-
-            downloaded = await downloadChecked({
+            const path = await downloadChecked({
                 url: image.url,
                 name: image.name,
                 folder: app.getPath("downloads"),
@@ -307,12 +341,146 @@ export function setUpUpdates(host: UpdateHost): {
                 fetch: (url) => net.fetch(url),
                 onProgress: (percent) => set({ percent }),
             });
+
+            downloaded = { version: latest.version, path };
             set({ status: "ready", percent: 100 });
-            await askToOpen(release.version, downloaded);
+            await askToOpen(latest.version, path);
         } catch (error) {
             set({ status: "error", message: (error as Error).message });
         }
     };
+
+    /**
+     * install: electron-updater checks again. When a newer version is out, it downloads that one (and drops the older
+     * download); when the downloaded one is still the newest, it only finds it again. Then the app asks to restart.
+     */
+    const actInstall = async (): Promise<void> => {
+        const known = state.version;
+        const autoUpdater = await setUpUpdater();
+
+        set({ status: "checking" });
+
+        let result: Awaited<ReturnType<typeof autoUpdater.checkForUpdates>>;
+
+        try {
+            result = await withTimeout(autoUpdater.checkForUpdates(), RECHECK_MS, "The check for a newer version");
+        } catch (error) {
+            set({ status: "error", message: recheckFailedMessage((error as Error).message, known), checkedAt: Date.now() });
+
+            return;
+        }
+
+        const latest = result?.isUpdateAvailable === true ? result.updateInfo.version : undefined;
+        const step = nextUpdateStep({
+            method: "install",
+            running: app.getVersion(),
+            ...(known === undefined ? {} : { known }),
+            ...(readyVersion === undefined ? {} : { downloaded: readyVersion }),
+            latest,
+        });
+
+        if (step.kind === "current" || latest === undefined) {
+            set({ status: "current", checkedAt: Date.now() });
+
+            return;
+        }
+
+        try {
+            await result?.downloadPromise;
+        } catch {
+            // The error event shows it on the card.
+            return;
+        }
+
+        if (readyVersion === latest) {
+            await askToRestart(latest);
+        }
+    };
+
+    /** download and page: GitHub's latest release, asked again now. */
+    const actRelease = async (current: "download" | "page"): Promise<void> => {
+        const known = state.version ?? release?.version;
+
+        set({ status: "checking" });
+
+        let latest: Release | undefined | Error;
+
+        try {
+            latest = await withTimeout(latestRelease(), RECHECK_MS, "The check for a newer version");
+        } catch (error) {
+            latest = error as Error;
+        }
+
+        const step = nextUpdateStep({
+            method: current,
+            running: app.getVersion(),
+            ...(known === undefined ? {} : { known }),
+            ...(downloaded === undefined ? {} : { downloaded: downloaded.version }),
+            latest: latest instanceof Error ? latest : latest?.version,
+        });
+
+        if (step.kind === "failed") {
+            set({ status: "error", message: step.message, checkedAt: Date.now() });
+
+            return;
+        }
+
+        if (step.kind === "current" || latest === undefined || latest instanceof Error) {
+            release = undefined;
+            await dropImage();
+            set({ status: "current", checkedAt: Date.now() });
+
+            return;
+        }
+
+        release = latest;
+        // "downloading" at once: a check or a click in between must not start a second download.
+        set({
+            status: step.kind === "open-image" ? "ready" : step.kind === "download" ? "downloading" : "available",
+            version: latest.version,
+            percent: 0,
+            checkedAt: Date.now(),
+        });
+        notifyAvailable(latest.version);
+
+        switch (step.kind) {
+            case "open-page":
+                void shell.openExternal(latest.page);
+                break;
+            case "open-image":
+                if (downloaded !== undefined) {
+                    await openAndQuit(downloaded.path);
+                }
+
+                break;
+            case "download":
+                await dropImage();
+                await downloadImage(latest);
+                break;
+            default:
+                break;
+        }
+    };
+
+    const act = singleFlight(async (): Promise<void> => {
+        if (state.status === "checking" || state.status === "downloading") {
+            return;
+        }
+
+        if (method === "source") {
+            await check(true);
+        } else if (method === "install") {
+            acting = true;
+
+            try {
+                await actInstall();
+            } finally {
+                acting = false;
+            }
+        } else {
+            await actRelease(method);
+        }
+    });
 
     const reschedule = (): void => {
         if (timer !== undefined) {
