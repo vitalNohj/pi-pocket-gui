@@ -4,6 +4,7 @@ import {
     canReturn,
     connectFailed,
     hostOf,
+    keepsLocalAsked,
     LocalStopNotice,
     localChoiceStatus,
     reconnectsByItself,
@@ -145,4 +146,13 @@ test("a notification for each stop on its own, not for each retry, Stop, Uninsta
     assert.equal(fresh.down({ kind: "update-failed" }, false), false, "an update goes back to the version before");
     assert.equal(fresh.down(crash, true), false, "the app quits");
     assert.equal(fresh.down(crash, false), true);
+});
+
+test("the person's Start survives a crash and an update that goes back; Stop and Uninstall end it (F1)", () => {
+    assert.equal(keepsLocalAsked({ kind: "crashed", message: "x" }), true);
+    assert.equal(keepsLocalAsked({ kind: "update-failed" }), true, "the version before starts, and then the window opens it");
+    assert.equal(keepsLocalAsked({ kind: "stopped" }), false);
+    assert.equal(keepsLocalAsked({ kind: "unavailable" }), false);
+    // The request kept, the version before is ready: the window uses it, which ends the remote connection.
+    assert.equal(whenLocalReady({ inUse: "remote", asked: keepsLocalAsked({ kind: "update-failed" }), showing: "server", viewing: "remote" }), "show");
 });

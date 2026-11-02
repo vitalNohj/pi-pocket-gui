@@ -57,6 +57,7 @@ import {
     canReturn,
     connectFailed,
     didNotLoad,
+    keepsLocalAsked,
     localChoiceStatus,
     LocalStopNotice,
     reconnectsByItself,
@@ -723,8 +724,9 @@ function localDown(why: LocalDown): void {
 
     state.localLogin = undefined;
 
-    // A crash keeps the person's Start: it starts again by itself, and then opens.
-    if (why.kind !== "crashed") {
+    // A crash, or an update that goes back to the version before, keeps the person's Start: it starts again by
+    // itself, and then opens. Stop, Uninstall, or no usable Pi Pocket ends it.
+    if (!keepsLocalAsked(why)) {
         state.localAsked = false;
     }
 

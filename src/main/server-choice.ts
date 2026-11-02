@@ -168,6 +168,15 @@ export type LocalDown =
     | { kind: "unavailable" };
 
 /**
+ * The person asked for this computer's Pi Pocket (Start, Install, Open), and it went down before it was ready. A crash
+ * or an update that goes back to the version before starts it again by itself: the request stays, and the window opens
+ * it when it is ready. Stop, Uninstall, or no usable Pi Pocket end the request.
+ */
+export function keepsLocalAsked(why: LocalDown): boolean {
+    return why.kind === "crashed" || why.kind === "update-failed";
+}
+
+/**
  * The desktop notification when this computer's Pi Pocket stops on its own: once for each stop, not for each try to
  * start it again; never for Stop, Uninstall, quitting the app, or an update that goes back to the version before.
  */

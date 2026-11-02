@@ -11,6 +11,7 @@ import { join } from "node:path";
 import type { LocalState, LocalStatus, LocalUpdate, ProbeResult, Settings } from "../shared/types";
 import { downloadChecked } from "./download";
 import type { LocalDown } from "./server-choice";
+import { UpdateSchedule } from "./update-schedule";
 import {
     cleanLine,
     compareVersions,
@@ -102,7 +103,6 @@ export function setUpLocalServer(host: LocalHost) {
     /** The data folder the running Pi Pocket uses, which a changed setting does not move until the restart. */
     let runningData: string | undefined;
     let update: LocalUpdate = { status: "idle" };
-    let updateTimer: NodeJS.Timeout | undefined;
     let restartTimer: NodeJS.Timeout | undefined;
     /** Starts that ended on their own in a row, for the wait before the next. */
     let failures = 0;
@@ -496,14 +496,8 @@ export function setUpLocalServer(host: LocalHost) {
         }
     };
 
-    const scheduleUpdates = (): void => {
-        clearTimeout(updateTimer);
-        const hours = host.settings().updates.intervalHours;
-
-        updateTimer = setTimeout(() => {
-            void checkUpdates(false).finally(scheduleUpdates);
-        }, hours * 3_600_000);
-    };
+    // One timer at most, however many ways it is started.
+    const updates = new UpdateSchedule(() => checkUpdates(false), () => host.settings().updates.intervalHours);
 
     /** The runtime an update built becomes the current one; the one before stays until the new one has started. */
     const adoptNext = async (): Promise<boolean> => {
@@ -925,8 +919,7 @@ export function setUpLocalServer(host: LocalHost) {
         environment: loginEnvironment,
         /** Look for newer versions now and then, also while another server is in use (the runner runs from it). */
         keepCurrent: (): void => {
-            void checkUpdates(false);
-            scheduleUpdates();
+            updates.ensure();
         },
         /** Pi Pocket's data folder: the running one's while it runs, else the one the settings name for its next start. */
         dataFolder: (): string => runningData ?? dataFolderOf(host.settings().local, defaults().data),
@@ -942,17 +935,19 @@ export function setUpLocalServer(host: LocalHost) {
                 await start();
             }
 
-            void checkUpdates(false);
-            scheduleUpdates();
+            updates.now();
         },
         /** Installs it; `run` (the person asked here): then starts it, in either mode. */
         install: async (run = false): Promise<void> => {
             wanted ||= run;
             await install();
+            // Kept current from now on, also when another server is in use (unless `keepUpdated` is off).
+            updates.ensure();
         },
         /** The person starts it: in either mode. */
         start: async (): Promise<void> => {
             wanted = true;
+            updates.ensure();
             await start();
         },
         stop,
@@ -967,7 +962,7 @@ export function setUpLocalServer(host: LocalHost) {
                 throw new Error("An install is under way. Wait for it to end.");
             }
 
-            clearTimeout(updateTimer);
+            updates.stop();
             await stop();
             child = undefined;
             await rm(runtimes, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
@@ -981,7 +976,7 @@ export function setUpLocalServer(host: LocalHost) {
             set("absent");
             host.down({ kind: "unavailable" });
         },
-        rescheduleUpdates: scheduleUpdates,
+        rescheduleUpdates: (): void => updates.plan(),
         /** The tray's line for a new version waiting for a restart. */
         trayItem: (): { label: string; click: () => void } | undefined =>
             update.status === "ready" && child !== undefined
@@ -991,7 +986,7 @@ export function setUpLocalServer(host: LocalHost) {
         /** At the app's quit: stop it, and wait. */
         quit: async (): Promise<void> => {
             quitting = true;
-            clearTimeout(updateTimer);
+            updates.stop();
             await stop();
         },
     };
