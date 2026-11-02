@@ -20,6 +20,7 @@ const api: GuiConfigApi = {
     updateAction: () => ipcRenderer.invoke("config:update-action") as Promise<void>,
     relaunch: () => ipcRenderer.invoke("config:relaunch") as Promise<void>,
     local: (action) => ipcRenderer.invoke("config:local", action) as Promise<void>,
+    view: (side) => ipcRenderer.invoke("config:view", side) as Promise<void>,
     chooseFolder: (start: string) => ipcRenderer.invoke("config:choose-folder", start) as Promise<string | undefined>,
     dictation: (action) => ipcRenderer.invoke("config:dictation", action) as Promise<void>,
     showDictationFolder: () => ipcRenderer.invoke("config:show-dictation-folder") as Promise<void>,

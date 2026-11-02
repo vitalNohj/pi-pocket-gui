@@ -168,6 +168,8 @@ The top links go to **Connection**, **App preferences**, **Runner**, and **Serve
 | Server tools | **Billion context** | Install context compression here, or get installation steps for your server. |
 | Server tools | **Remote server** | Connect at startup, allow other addresses, and set check and retry limits. Shown with **Another server**. |
 
+The two choices at the top, **This computer** and **Another server**, only show that side's settings, with a status for each. A click on a choice does not connect, disconnect, start, or stop anything. The window changes servers only when you click **Connect**, **Start**, or **Open**. A remote connection stays while you look at This computer. When Pi Pocket on this computer stops on its own, the app shows a notification.
+
 Use the server address you open in a browser, not a model API address. A failed check keeps your saved address and any working connection. The status shows **Connected** when Pi Pocket is open. To change servers, enter and check the new address before you connect.
 
 If a sign-in page hides Pi Pocket, choose **Open webpage anyway**. This is available only for HTML pages. A **Server settings** button stays visible until Pi Pocket is detected. HTTP errors and other responses return to settings.

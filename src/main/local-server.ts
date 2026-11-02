@@ -10,6 +10,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { LocalState, LocalStatus, LocalUpdate, ProbeResult, Settings } from "../shared/types";
 import { downloadChecked } from "./download";
+import type { LocalDown } from "./server-choice";
 import {
     cleanLine,
     compareVersions,
@@ -54,8 +55,8 @@ export interface LocalHost {
     changed: () => void;
     /** The server is ready: open the login link (a path with its token) at the address. */
     ready: (url: string, loginPath: string) => void;
-    /** It stopped, failed, or was found running outside the app: the window cannot show it. */
-    down: () => void;
+    /** It stopped, failed, or was found running outside the app: the window cannot show it. Why, for the window. */
+    down: (why: LocalDown) => void;
 }
 
 /** One runtime, as current.json keeps it. */
@@ -90,6 +91,8 @@ export function setUpLocalServer(host: LocalHost) {
 
     let status: LocalStatus = "stopped";
     let message: string | undefined;
+    /** It stopped on its own: why, in a few words, until it runs or is stopped again. */
+    let crash: string | undefined;
     let progress: LocalState["progress"];
     let url: string | undefined;
     let lines: string[] = [];
@@ -107,6 +110,14 @@ export function setUpLocalServer(host: LocalHost) {
     let building: Promise<unknown> | undefined;
     let environment: Promise<NodeJS.ProcessEnv> | undefined;
     let quitting = false;
+    /**
+     * It should run: the person started it, or it ran. It starts by itself (at the app's start, after an install, or
+     * again after a crash) only in "This computer" mode or while wanted, so an install for the runner alone does not
+     * start it, and one the person started keeps running while another server is in use.
+     */
+    let wanted = false;
+    /** A restart (the person's, or for an update) stops it on the way: the window is not told it went down. */
+    let restarting = false;
 
     const readCurrent = (): Current => {
         try {
@@ -143,6 +154,10 @@ export function setUpLocalServer(host: LocalHost) {
     const set = (next: LocalStatus, text?: string) => {
         status = next;
         message = text;
+
+        if (next !== "failed") {
+            crash = undefined;
+        }
 
         if (next !== "installing") {
             progress = undefined;
@@ -407,7 +422,7 @@ export function setUpLocalServer(host: LocalHost) {
                 installed = true;
             } catch (error) {
                 set("failed", `The install failed: ${(error as Error).message}`);
-                host.down();
+                host.down({ kind: "unavailable" });
             }
 
             return installed;
@@ -635,7 +650,7 @@ export function setUpLocalServer(host: LocalHost) {
 
         const settings = host.settings();
 
-        if (settings.server.mode !== "local") {
+        if (settings.server.mode !== "local" && !wanted) {
             return;
         }
 
@@ -650,7 +665,7 @@ export function setUpLocalServer(host: LocalHost) {
                 await writeCurrent({ current: current.previous });
             } else {
                 set("absent");
-                host.down();
+                host.down({ kind: "unavailable" });
 
                 return;
             }
@@ -669,7 +684,7 @@ export function setUpLocalServer(host: LocalHost) {
         if (found.kind === "detected") {
             url = found.url;
             set("external", `Pi Pocket already runs at ${found.url}, started outside this app.`);
-            host.down();
+            host.down({ kind: "unavailable" });
 
             return;
         }
@@ -717,6 +732,7 @@ export function setUpLocalServer(host: LocalHost) {
             : undefined;
 
         child = proc;
+        wanted = true;
         startedWith = settingsKey();
         runningData = dataFolderOf(local, defaults().data);
 
@@ -764,16 +780,20 @@ export function setUpLocalServer(host: LocalHost) {
             if (quitting || status === "stopping") {
                 set("stopped");
 
+                // Stopped by the person: the window cannot show it any more. Not when the app quits.
+                if (!quitting && !restarting) {
+                    host.down({ kind: "stopped" });
+                }
+
                 return;
             }
-
-            host.down();
 
             // A new runtime that never got ready: back to the one before.
             if (!ready && isNew) {
                 const before = readCurrent();
 
                 if (usable(before.previous)) {
+                    host.down({ kind: "update-failed" });
                     void writeCurrent({ current: before.previous }).then(async () => {
                         update = { status: "error", message: "The new version did not start, so the one before runs again.", checkedAt: Date.now() };
                         set("stopped");
@@ -785,9 +805,15 @@ export function setUpLocalServer(host: LocalHost) {
             }
 
             const last = cause(lines);
+            const how = signal ?? `code ${String(code)}`;
+            const failed = (text: string): void => {
+                crash = last || (code === CONFIG_ERROR ? "it could not start with these settings." : `it exited (${how}).`);
+                set("failed", text);
+                host.down({ kind: "crashed", message: crash });
+            };
 
             if (code === CONFIG_ERROR) {
-                set("failed", last || "Pi Pocket could not start with these settings.");
+                failed(last || "Pi Pocket could not start with these settings.");
 
                 return;
             }
@@ -795,20 +821,21 @@ export function setUpLocalServer(host: LocalHost) {
             failures += 1;
 
             if (failures > 5) {
-                set("failed", `Pi Pocket stopped ${String(failures)} times in a row (${signal ?? `code ${String(code)}`}). ${last}`);
+                failed(`Pi Pocket stopped ${String(failures)} times in a row (${how}). ${last}`);
 
                 return;
             }
 
             const wait = Math.min(60, 2 ** failures);
 
-            set("failed", `Pi Pocket stopped (${signal ?? `code ${String(code)}`}). Starting it again in ${String(wait)} s. ${last}`);
+            failed(`Pi Pocket stopped (${how}). Starting it again in ${String(wait)} s. ${last}`);
             restartTimer = setTimeout(() => void start(), wait * 1000);
         });
     };
 
     const stop = async (): Promise<void> => {
         clearTimeout(restartTimer);
+        wanted = false;
         const proc = child;
 
         if (proc === undefined || proc.exitCode !== null) {
@@ -838,9 +865,23 @@ export function setUpLocalServer(host: LocalHost) {
     };
 
     const restart = async (): Promise<void> => {
-        await stop();
+        restarting = true;
+
+        try {
+            await stop();
+        } finally {
+            restarting = false;
+        }
+
+        // It ran, so it runs again, also while another server is in use.
+        wanted = true;
         await start();
     };
+
+    // Not installed: say so from the start, also while another server is in use (boot runs only for This computer).
+    if (!usable(readCurrent().current)) {
+        status = "absent";
+    }
 
     return {
         state(): LocalState {
@@ -851,6 +892,7 @@ export function setUpLocalServer(host: LocalHost) {
             return {
                 status,
                 ...(message === undefined ? {} : { message }),
+                ...(crash === undefined ? {} : { crash }),
                 ...(progress === undefined ? {} : { progress }),
                 ...(runtime !== undefined && pocket !== undefined ? { installed: { pocket, node: runtime.node } } : {}),
                 ...(url === undefined ? {} : { url }),
@@ -895,7 +937,7 @@ export function setUpLocalServer(host: LocalHost) {
 
             if (!usable(readCurrent().current)) {
                 set("absent");
-                host.down();
+                host.down({ kind: "unavailable" });
             } else {
                 await start();
             }
@@ -903,8 +945,16 @@ export function setUpLocalServer(host: LocalHost) {
             void checkUpdates(false);
             scheduleUpdates();
         },
-        install,
-        start,
+        /** Installs it; `run` (the person asked here): then starts it, in either mode. */
+        install: async (run = false): Promise<void> => {
+            wanted ||= run;
+            await install();
+        },
+        /** The person starts it: in either mode. */
+        start: async (): Promise<void> => {
+            wanted = true;
+            await start();
+        },
         stop,
         restart,
         checkUpdates: () => checkUpdates(true),
@@ -929,7 +979,7 @@ export function setUpLocalServer(host: LocalHost) {
             url = undefined;
             update = { status: "idle" };
             set("absent");
-            host.down();
+            host.down({ kind: "unavailable" });
         },
         rescheduleUpdates: scheduleUpdates,
         /** The tray's line for a new version waiting for a restart. */

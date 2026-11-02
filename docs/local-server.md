@@ -23,6 +23,10 @@ Settings → Connection offers two choices:
 A Pi Pocket that already answers at the chosen port (one started from a terminal) is offered instead: **Open it**
 switches to Another server with its address.
 
+A click on a choice only shows that side. The window uses the server of the last **Connect**, **Start**, or **Open**,
+and the app opens that side at its next start. Connect to another server leaves this computer's Pi Pocket running
+until you click **Stop**; its **Open** switches the window back to it.
+
 Settings that existed before this choice keep opening their server (Another server); a new install starts on This
 computer.
 

@@ -1,5 +1,5 @@
 /** Server settings: connection, app preferences, then server tools. */
-import type { BillionContextAction, ConfigReason, ConfigState, DictationModelState, GuiConfigApi, LocalAction, LocalState, ProbeResult, RunnerState, Settings } from "../../shared/types";
+import type { BillionContextAction, ChoiceStatus, ConfigReason, ConfigState, DictationModelState, GuiConfigApi, LocalAction, LocalState, ProbeResult, RunnerState, Settings, Side } from "../../shared/types";
 
 declare global {
     interface Window {
@@ -109,7 +109,7 @@ function addressChanged(): void {
 
     if (state !== undefined && connectedHere(state)) {
         showConnected(state);
-    } else {
+    } else if (state === undefined || !showDisconnected(state)) {
         showStatus(undefined, "Not checked yet");
     }
 
@@ -175,6 +175,21 @@ function sameUrl(a: string, b: string): boolean {
     };
 
     return plain(a) === plain(b);
+}
+
+/** The window's connection to another server dropped, and the typed address is that server's. */
+function showDisconnected(next: ConfigState): boolean {
+    const lost = next.disconnected;
+
+    if (lost === undefined || next.connectedUrl !== undefined || !sameUrl(typedUrl(), lost.url) || next.probe?.kind === "detected") {
+        return false;
+    }
+
+    status.dataset.state = "not-detected";
+    status.textContent = "Disconnected";
+    statusDetail.textContent = `Disconnected: ${lost.line}.`;
+
+    return true;
 }
 
 function showConnected(next: ConfigState): void {
@@ -348,13 +363,30 @@ const LOCAL_LABELS: Record<LocalState["status"], { pill: string; state: string }
     failed: { pill: "Stopped", state: "not-detected" },
 };
 
+/** A choice's status pill, and its error line (clipped; the card has the whole text). */
+function renderChoice(side: Side, choice: ChoiceStatus): void {
+    const pill = element(`choice-${side}`);
+    const error = element(`choice-${side}-error`);
+
+    pill.textContent = choice.label;
+    pill.dataset.state = choice.state;
+    error.hidden = choice.detail === undefined;
+    error.textContent = choice.detail ?? "";
+    error.title = choice.detail ?? "";
+}
+
 function renderLocal(next: ConfigState): void {
     const local = next.local;
-    const isLocal = next.settings.server.mode === "local";
+    // The side shown, which only a click on a choice changes: not the server the window uses.
+    const isLocal = next.viewing === "local";
+    const inUse = next.inUse === "local";
 
     for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="where"]')) {
-        radio.checked = radio.value === next.settings.server.mode;
+        radio.checked = radio.value === next.viewing;
     }
+
+    renderChoice("local", next.choices.local);
+    renderChoice("remote", next.choices.remote);
 
     element("local-card").hidden = !isLocal;
     element("remote-card").hidden = isLocal;
@@ -372,12 +404,14 @@ function renderLocal(next: ConfigState): void {
     const detail: Record<LocalState["status"], string> = {
         absent: "Downloads Pi Pocket and Node.js (about 60 MB; 400 MB on disk).",
         installing: local.message ?? "Installing…",
-        stopped: `${versions} It starts with the app.`,
+        stopped: inUse ? `${versions} It starts with the app.` : `${versions} Start runs it and opens it in this window.`,
         starting: `${versions} Starting…`,
-        running: `${versions} Open at ${local.url ?? ""}. Quitting the app stops the server. Sessions continue at the next start.`,
+        running: inUse
+            ? `${versions} Open at ${local.url ?? ""}. Quitting the app stops the server. Sessions continue at the next start.`
+            : `${versions} Runs at ${local.url ?? ""}, while the window uses another server. Open switches the window to it. Quitting the app stops the server.`,
         external: `${local.message ?? "Pi Pocket already runs on this port."} Open it, or stop it outside the app to run a server here.`,
         stopping: "Stopping…",
-        failed: local.message ?? "Pi Pocket stopped.",
+        failed: local.crash !== undefined ? `Stopped on its own. ${local.message ?? ""}`.trim() : local.message ?? "Pi Pocket stopped.",
     };
 
     element("local-detail").textContent = detail[local.status];
@@ -398,11 +432,13 @@ function renderLocal(next: ConfigState): void {
 
     show("install", local.status === "absent" || (local.status === "failed" && !installed));
     show("start", installed && (local.status === "stopped" || local.status === "failed"));
-    show("open", local.status === "external");
+    // Open: one started outside the app, or the app's own while the window uses another server.
+    show("open", local.status === "external" || (local.status === "running" && !(inUse && next.canReturn)));
     show("restart", local.status === "running");
     show("stop", local.status === "running" || local.status === "starting");
     element("local-uninstall-row").hidden = !installed || local.status === "installing" || local.status === "stopping";
-    element("local-show").hidden = !(local.status === "running" && next.connectedUrl !== undefined);
+    // The window uses it and has it open: Show goes back to it, like Back to Pi Pocket.
+    element("local-show").hidden = !(local.status === "running" && inUse && next.canReturn);
     element("local-restart-row").hidden = !local.restartNeeded;
 
     element<HTMLInputElement>("local-folder").placeholder = local.defaults.folder;
@@ -460,7 +496,8 @@ element("local-show").addEventListener("click", () => {
 for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="where"]')) {
     radio.addEventListener("change", () => {
         if (radio.checked) {
-            void gui.local(radio.value === "local" ? "use-local" : "use-remote");
+            // Only shows that side: nothing connects, disconnects, starts, or stops.
+            void gui.view(radio.value === "local" ? "local" : "remote");
         }
     });
 }
@@ -514,6 +551,8 @@ function render(next: ConfigState): void {
 
     if (connectedHere(next)) {
         showConnected(next);
+    } else if (showDisconnected(next)) {
+        // Said in the status: the connection dropped.
     } else if (!editing || (next.probe !== undefined && sameUrl(next.probe.url, typedUrl()))) {
         showStatus(next.probe);
     }
