@@ -48,6 +48,7 @@ import { setUpAppearance } from "./appearance";
 import { parseAppsUseLightTheme, setUpTitleBar, titleBarOptions } from "./titlebar";
 import { loadTheme, sameTheme, saveTheme } from "./theme";
 import { setUpDesktop } from "./desktop";
+import { isNewSessionKey, listenForNewSessionLinks, newSessionMenuItem, offerNewSession } from "./new-session";
 import { setUpDictation } from "./dictation";
 import { ADAPTER, ADAPTER_PAGE, setUpBillionContext } from "./billion-context";
 import { computerName, setUpRunner } from "./runner";
@@ -103,6 +104,7 @@ registerAppScheme();
 if (!app.requestSingleInstanceLock()) {
     app.quit();
 } else {
+    listenForNewSessionLinks();
     void start();
 }
 
@@ -447,6 +449,7 @@ async function start(): Promise<void> {
 
             return true;
         },
+        serverLoaded: () => gui?.loadedUrl !== undefined,
         tray: () => gui?.tray,
         showWindow,
         toggleWindow,
@@ -586,6 +589,7 @@ async function start(): Promise<void> {
     registerIpc();
     applyDesktopSettings(undefined);
     buildMenu();
+    offerNewSession(newSession);
     await config.webContents.loadURL(CONFIG_URL);
 
     if (placed.maximized) {
@@ -1173,6 +1177,9 @@ function watchServerView(): void {
         if (input.type === "keyDown" && input.key === "," && (process.platform === "darwin" ? input.meta : input.control) && !input.alt) {
             event.preventDefault();
             openSettings();
+        } else if (isNewSessionKey(input, process.platform)) {
+            event.preventDefault();
+            newSession();
         }
     });
     contents.on("context-menu", (_event, params) => {
@@ -1573,6 +1580,11 @@ function createTray(): Tray {
     return tray;
 }
 
+/** New session (src/main/new-session.ts): the window shows, and the page opens its New session sheet when it can. */
+function newSession(starting = false): void {
+    gui?.desktop?.newSession(starting);
+}
+
 /** The config screen, on the side of the server in use. Menus call it with their own arguments: it takes none. */
 function openSettings(): void {
     openSettingsOn(undefined);
@@ -1604,6 +1616,8 @@ function buildMenu(): void {
         {
             label: "File",
             submenu: [
+                newSessionMenuItem(() => newSession()),
+                { type: "separator" },
                 { label: "Server settings…", accelerator: "CommandOrControl+,", click: openSettings },
                 { type: "separator" },
                 mac ? { role: "close" } : { label: "Quit", accelerator: "CommandOrControl+Q", click: quit },

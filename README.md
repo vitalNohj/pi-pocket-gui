@@ -33,6 +33,7 @@ The app runs Pi Pocket on this computer for you, or opens one you already run el
 | **Seamless window** | No title bar: Pi Pocket runs to the top edge, and the window's buttons sit over it. |
 | **See-through background** | The desktop shows through Pi Pocket's background, blurred, as much as you choose. |
 | **Your theme** | The settings screen, the window, and the tray's π follow the theme Pi Pocket shows. |
+| **New session from anywhere** | ⌘N / Ctrl+N, the dock's menu (macOS), the tray menu, or a `pi-pocket://new` link: the window shows with Pi Pocket's New session sheet open. |
 | **Global shortcut** | Show or hide the window from anywhere. |
 | **Launch at login** | Optionally hidden in the tray, so notifications keep coming. |
 | **Updates** | It checks for new releases and installs them (or downloads them, on macOS). |
@@ -198,13 +199,12 @@ The **Updates** card manages the desktop app, not the server. The app checks at 
 
 ## How it talks to Pi Pocket
 
-Pi Pocket's page runs in the app as it does in a browser, with one addition: a small, versioned bridge (`window.pocketHost`) through which the page tells the app about pins, the badge, and notifications, and the app tells the page when its window is hidden. The bridge is on a branch of Pi Pocket and not yet in a release: against a Pi Pocket without it, the app still works, without the tray pins, badge, and notifications, and says so once.
+Pi Pocket's page runs in the app as it does in a browser, with one addition: a small, versioned bridge (`window.pocketHost`) through which the page tells the app about pins, the badge, and notifications, and the app tells the page when its window is hidden and when to open the New session sheet. A Pi Pocket whose page does not handle New session (it does not name `newSession` as it subscribes) gets the window only. The bridge is on a branch of Pi Pocket and not yet in a release: against a Pi Pocket without it, the app still works, without the tray pins, badge, and notifications, and says so once.
 
 ## Roadmap
 
 Being worked on, none of it in the app yet:
 
-- **New session from anywhere:** ⌘N / Ctrl+N, the dock's or taskbar's menu, and a `pi-pocket://new` link.
 - **Signed builds** for macOS and Windows, so updates install themselves everywhere.
 
 ## Develop

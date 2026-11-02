@@ -29,6 +29,7 @@ import { pinLabel, readBadge, readNotification, readPinned } from "./bridge-inpu
 import { offersAllow, showCall } from "./notice-text";
 import { buildTrayMenu, readAccent } from "./tray-menu";
 import { setUpTrayPopup } from "./tray-popup";
+import { type NewSessionView, PendingNewSession, readPageEvents } from "./new-session";
 
 /** What the bridge needs from the rest of the app. */
 export interface DesktopHost {
@@ -41,6 +42,8 @@ export interface DesktopHost {
     settings: () => Settings;
     /** The server view shows (not the config screen). */
     showingServer: () => boolean;
+    /** The server view has a server's page loaded, or loading. */
+    serverLoaded: () => boolean;
     /** Show the server view, when it has the server loaded. Whether it shows now. */
     showServer: () => boolean;
     tray: () => Tray | undefined;
@@ -77,6 +80,8 @@ const shown = new Map<string, Notification>();
 let pins: PinnedSession[] = [];
 let badge = 0;
 let lastVisible: boolean | undefined;
+/** The host events the page said it handles, as it subscribed; undefined until it did. */
+let pageEvents: Set<string> | undefined;
 let trayIcons: { plain: NativeImage; dot: NativeImage; brand: string; dotColor: string } | undefined;
 
 export function setUpDesktop(host: DesktopHost): {
@@ -88,6 +93,12 @@ export function setUpDesktop(host: DesktopHost): {
     fromServerPage: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean;
     /** The server view left the server, or loaded again: what its page said no longer holds. */
     reset: () => void;
+    /**
+     * New session: show the window, and ask the page to open its New session sheet when it shows and can. On the
+     * settings screen, with no server, or with an older Pi Pocket, only the window shows. `starting`: the app was
+     * started for it (a link), and connects now: it waits for the page as for one that is loading.
+     */
+    newSession: (starting?: boolean) => void;
 } {
     const fromServerPage = (event: IpcMainEvent | IpcMainInvokeEvent): boolean => {
         const frame = event.senderFrame;
@@ -112,6 +123,15 @@ export function setUpDesktop(host: DesktopHost): {
         if (!contents.isDestroyed()) {
             contents.send("host:event", event);
         }
+    };
+
+    // A New session that waits for the page to subscribe (it is loading).
+    const pendingNewSession = new PendingNewSession(() => send({ type: "newSession" }));
+    const view = (): NewSessionView => ({ showingServer: host.showingServer(), serverLoaded: host.serverLoaded(), pageEvents });
+
+    const newSession = (starting = false): void => {
+        host.showWindow();
+        pendingNewSession.request(view(), starting);
     };
 
     const open = (url: string): void => {
@@ -184,6 +204,7 @@ export function setUpDesktop(host: DesktopHost): {
         const update = host.updateItem();
         const template: MenuItemConstructorOptions[] = [
             { label: badge > 0 ? `Open Pi Pocket  (${badge} need you)` : "Open Pi Pocket", click: host.showWindow },
+            { label: "New session", click: () => newSession() },
             ...(update === undefined ? [] : [{ label: update.label, click: update.click }]),
             ...(pinItems.length > 0
                 ? [{ type: "separator" as const }, { label: "Pinned", enabled: false }, ...pinItems]
@@ -212,6 +233,7 @@ export function setUpDesktop(host: DesktopHost): {
             update: host.updateItem(),
             pins,
             showWindow: host.showWindow,
+            newSession: () => newSession(),
             openSettings: host.openSettings,
             quit: host.quit,
             openPin: open,
@@ -337,6 +359,16 @@ export function setUpDesktop(host: DesktopHost): {
         }
     });
 
+    // The page subscribed to the app's events, and named the ones it handles (an older page names none).
+    ipcMain.on("host:events", (event, input: unknown) => {
+        if (!fromServerPage(event)) {
+            return;
+        }
+
+        pageEvents = readPageEvents(input);
+        pendingNewSession.pageSubscribed(view());
+    });
+
     ipcMain.on("host:invoke", (event, id: unknown) => {
         if (fromServerPage(event) && id === "server-settings") {
             host.openSettings();
@@ -383,6 +415,9 @@ export function setUpDesktop(host: DesktopHost): {
 
     return {
         visibilityChanged: () => {
+            // The settings screen shows: a New session asked for on the server no longer opens the sheet.
+            pendingNewSession.screenChanged(host.showingServer());
+
             const now = visible();
 
             if (now !== lastVisible) {
@@ -402,6 +437,8 @@ export function setUpDesktop(host: DesktopHost): {
             }
 
             lastVisible = undefined;
+            pageEvents = undefined;
         },
+        newSession,
     };
 }

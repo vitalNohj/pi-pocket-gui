@@ -48,13 +48,14 @@ export interface TrayMenuInput {
     update: { label: string; click: () => void } | undefined;
     pins: PinnedSession[];
     showWindow: () => void;
+    newSession: () => void;
     openSettings: () => void;
     quit: () => void;
     openPin: (url: string) => void;
 }
 
 /**
- * The tray's items, in the order the native menu has always used: Open Pi Pocket (with the needs-you count), the
+ * The tray's items, in the order the native menu uses: Open Pi Pocket (with the needs-you count), New session, the
  * update when there is one, the pinned sessions, Server settings…, Quit.
  */
 export function buildTrayMenu(input: TrayMenuInput): TrayMenuModel {
@@ -63,6 +64,7 @@ export function buildTrayMenu(input: TrayMenuInput): TrayMenuModel {
         label: input.badge > 0 ? `Open Pi Pocket  (${input.badge} need you)` : "Open Pi Pocket",
         run: input.showWindow,
     };
+    const newSession: TrayMenuAction = { id: "new-session", label: "New session", run: input.newSession };
     const update: TrayMenuAction | undefined =
         input.update === undefined ? undefined : { id: "update", label: input.update.label, run: input.update.click };
     const pins: TrayMenuAction[] = input.pins.map((pin) => ({
@@ -72,9 +74,10 @@ export function buildTrayMenu(input: TrayMenuInput): TrayMenuModel {
     }));
     const settings: TrayMenuAction = { id: "settings", label: "Server settings…", run: input.openSettings };
     const quit: TrayMenuAction = { id: "quit", label: "Quit", run: input.quit };
-    const actions = [open, ...(update === undefined ? [] : [update]), ...pins, settings, quit];
+    const actions = [open, newSession, ...(update === undefined ? [] : [update]), ...pins, settings, quit];
     const rows: TrayMenuRow[] = [
         rowOf(open),
+        rowOf(newSession),
         ...(update === undefined ? [] : [rowOf(update)]),
         ...(pins.length > 0 ? [{ kind: "separator" as const }, { kind: "header" as const, label: "Pinned" }, ...pins.map(rowOf)] : []),
         { kind: "separator" },

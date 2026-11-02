@@ -412,7 +412,9 @@ export interface HostNotification {
 export type HostEvent =
     | { type: "visibility"; visible: boolean }
     | { type: "open"; url: string }
-    | { type: "approve"; id: string; allow: boolean };
+    | { type: "approve"; id: string; allow: boolean }
+    /** Open the New session sheet: only for a page that named "newSession" as it subscribed. */
+    | { type: "newSession" };
 
 /** Pi Pocket's theme tokens the app takes (src/main/theme.ts). */
 /** How the window's top looks: Pi Pocket up to the edge, or the system's own title bar. */

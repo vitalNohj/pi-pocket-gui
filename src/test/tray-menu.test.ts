@@ -44,6 +44,7 @@ test("the menu keeps every item, in the order the native menu uses", () => {
         update: { label: "Update ready to install", click: () => (opened = "update") },
         pins: [pin(1, "First draft"), pin(2, "A  double  gap")],
         showWindow: () => (opened = "window"),
+        newSession: () => (opened = "new"),
         openSettings: () => (opened = "settings"),
         quit: () => (opened = "quit"),
         openPin: (url) => (opened = url),
@@ -51,25 +52,28 @@ test("the menu keeps every item, in the order the native menu uses", () => {
 
     assert.deepEqual(
         menu.rows.map((row) => (row.kind === "separator" ? "—" : row.kind === "header" ? row.label : row.label)),
-        ["Open Pi Pocket  (3 need you)", "Update ready to install", "—", "Pinned", "First draft", "A double gap", "—", "Server settings…", "—", "Quit"],
+        ["Open Pi Pocket  (3 need you)", "New session", "Update ready to install", "—", "Pinned", "First draft", "A double gap", "—", "Server settings…", "—", "Quit"],
     );
     assert.deepEqual(
         menu.rows.filter((row) => row.kind === "action").map((row) => row.mark),
-        [undefined, undefined, "◆", "◆", undefined, undefined],
+        [undefined, undefined, undefined, "◆", "◆", undefined, undefined],
     );
 
     menu.actions.find((action) => action.id === "open")?.run();
     assert.equal(opened, "window");
+    menu.actions.find((action) => action.id === "new-session")?.run();
+    assert.equal(opened, "new");
     menu.actions.find((action) => action.id === "pin-2")?.run();
     assert.equal(opened, "/s/2");
 });
 
-test("without a badge, an update, or pins, the menu is Open, Server settings, Quit", () => {
+test("without a badge, an update, or pins, the menu is Open, New session, Server settings, Quit", () => {
     const menu = buildTrayMenu({
         badge: 0,
         update: undefined,
         pins: [],
         showWindow: () => undefined,
+        newSession: () => undefined,
         openSettings: () => undefined,
         quit: () => undefined,
         openPin: () => undefined,
@@ -77,7 +81,7 @@ test("without a badge, an update, or pins, the menu is Open, Server settings, Qu
 
     assert.deepEqual(
         menu.rows.map((row) => (row.kind === "action" ? row.label : row.kind)),
-        ["Open Pi Pocket", "separator", "Server settings…", "separator", "Quit"],
+        ["Open Pi Pocket", "New session", "separator", "Server settings…", "separator", "Quit"],
     );
 });
 
@@ -175,6 +179,7 @@ test("a pin title's doubled ampersand is undone, so the popup shows one", () => 
         update: undefined,
         pins: [pin(1, "Fix A & B")],
         showWindow: () => undefined,
+        newSession: () => undefined,
         openSettings: () => undefined,
         quit: () => undefined,
         openPin: () => undefined,
@@ -195,6 +200,7 @@ test("the page draws the items and escapes a label", () => {
         update: undefined,
         pins: [pin(1, `<script>alert("x")</script>`)],
         showWindow: () => undefined,
+        newSession: () => undefined,
         openSettings: () => undefined,
         quit: () => undefined,
         openPin: () => undefined,
