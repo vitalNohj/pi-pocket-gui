@@ -3,14 +3,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { computerName, setUpRunner, type RunnerConfirmation, type RunnerHost } from "../main/runner";
+import { setUpRunner, type RunnerConfirmation, type RunnerHost } from "../main/runner";
 import { validateSettings } from "../main/settings";
-
-test("a computer's name drops macOS's .local and a domain", () => {
-    assert.equal(computerName("Johns-MacBook-Pro.local"), "Johns MacBook Pro");
-    assert.equal(computerName("opti-nohj.tail1234.ts.net"), "opti nohj");
-    assert.equal(computerName(""), "This computer");
-});
 
 function host(home: string, overrides: Partial<RunnerHost> = {}): RunnerHost {
     let enabled = true;

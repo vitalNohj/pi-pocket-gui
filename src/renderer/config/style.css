@@ -351,6 +351,15 @@ code {
     width: 96px;
 }
 
+.field.runner-code {
+    flex: 0 1 220px;
+}
+
+.runner-link-form {
+    display: grid;
+    gap: 10px;
+}
+
 input[type="text"],
 input[type="number"],
 select,

@@ -51,7 +51,7 @@ import { setUpDesktop } from "./desktop";
 import { isNewSessionKey, listenForNewSessionLinks, newSessionMenuItem, offerNewSession } from "./new-session";
 import { setUpDictation } from "./dictation";
 import { ADAPTER, ADAPTER_PAGE, setUpBillionContext } from "./billion-context";
-import { computerName, setUpRunner } from "./runner";
+import { setUpRunner } from "./runner";
 import { askRunnerSession } from "./runner-dialog";
 import { setUpLocalServer } from "./local-server";
 import {
@@ -458,15 +458,6 @@ async function start(): Promise<void> {
         updateItem: () => gui?.updates?.trayItem() ?? gui?.local?.trayItem(),
         theme: () => gui!.theme,
         dictation: () => gui?.dictation?.state().supported === true,
-        computerName: () => computerName(),
-        linkRunner: async (server, code) => {
-            await gui!.runner!.linkTo(server, code);
-
-            // The runner runs from Pi Pocket on this computer: keep that current, also while another server is in use.
-            if (gui!.settings.server.mode !== "local") {
-                gui!.local!.keepCurrent();
-            }
-        },
         themeChanged: (next) => {
             const state = gui!;
 
@@ -1038,7 +1029,7 @@ function configState(): ConfigState {
         local,
         dictation: state.dictation!.state(),
         billionContext: state.billionContext!.state(),
-        runner: state.runner!.state(),
+        runner: { ...state.runner!.state(), ...(currentOrigin() === "null" ? {} : { suggestedServer: currentOrigin() }) },
     };
 }
 
@@ -1854,6 +1845,26 @@ function registerIpc(): void {
         }
 
         return localAction(action as LocalAction);
+    });
+
+    // The Runner card's form: the server's address and a one-time code from its Menu → Runners, as `runner link` takes.
+    handle("config:link-runner", async (_event, request: unknown) => {
+        const { server, code } = (typeof request === "object" && request !== null ? request : {}) as { server?: unknown; code?: unknown };
+
+        if (typeof server !== "string" || server.trim() === "") {
+            throw new Error("Enter the server's address.");
+        }
+
+        if (typeof code !== "string" || !/^[A-Za-z0-9-]{4,64}$/.test(code.trim())) {
+            throw new Error("Enter the one-time code from the server's Menu → Runners → Link a computer.");
+        }
+
+        await gui!.runner!.linkTo(server.trim(), code.trim().toUpperCase());
+
+        // The runner runs from Pi Pocket on this computer: keep that current, also while another server is in use.
+        if (gui!.settings.server.mode !== "local") {
+            gui!.local!.keepCurrent();
+        }
     });
 
     handle("config:runner", async (_event, action) => {

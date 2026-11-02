@@ -1127,7 +1127,7 @@ function renderRunner(next: ConfigState): void {
     let detail: string;
 
     if (link === undefined) {
-        detail = "Link this computer to let your server use its files and commands.";
+        detail = "Not linked to a server yet.";
     } else if (runner.status === "connected") {
         detail = `Linked as “${link.name}” to ${link.server}. Sessions can use this computer.`;
     } else {
@@ -1136,7 +1136,15 @@ function renderRunner(next: ConfigState): void {
 
     element("runner-status").textContent = runner.busy ?? RUNNER_STATUS[runner.status] ?? "";
     element("runner-detail").textContent = detail;
-    element("runner-how").hidden = link !== undefined && runner.status !== "ended";
+    // The form shows until a link works: also after the server ended one, to link again.
+    element("runner-link-form").hidden = link !== undefined && runner.status !== "ended";
+    element<HTMLButtonElement>("runner-link").disabled = busy;
+
+    const address = element<HTMLInputElement>("runner-server");
+
+    if (address.value === "" && document.activeElement !== address) {
+        address.value = link?.server ?? runner.suggestedServer ?? "";
+    }
     element("runner-enabled-row").classList.toggle("off", link === undefined);
     element("runner-confirm-error").hidden = runner.confirmError === undefined;
     element("runner-confirm-error").textContent = runner.confirmError ?? "";
@@ -1151,6 +1159,34 @@ function renderRunner(next: ConfigState): void {
 
     element("runner-log-box").hidden = runner.log.length === 0;
     element("runner-log").textContent = runner.log.join("\n");
+}
+
+/** The Runner card's Link: `runner link <server> <code>`, as on any computer. (Inside the settings form: no form here.) */
+function linkRunner(): void {
+    const error = element("runner-link-error");
+    const code = element<HTMLInputElement>("runner-code");
+
+    error.hidden = true;
+    gui.linkRunner({ server: element<HTMLInputElement>("runner-server").value, code: code.value })
+        .then(() => {
+            code.value = "";
+        })
+        .catch((failure: unknown) => {
+            // Electron puts "Error invoking remote method 'config:link-runner': Error: " in front of the message.
+            error.textContent = (failure as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
+            error.hidden = false;
+        });
+}
+
+element("runner-link").addEventListener("click", linkRunner);
+
+for (const id of ["runner-server", "runner-code"]) {
+    element(id).addEventListener("keydown", (event) => {
+        if ((event as KeyboardEvent).key === "Enter") {
+            event.preventDefault();
+            linkRunner();
+        }
+    });
 }
 
 element("runner-restart").addEventListener("click", () => {
