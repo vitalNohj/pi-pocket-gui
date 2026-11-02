@@ -111,6 +111,9 @@ Words show while you speak and are corrected when you pause (**Words as you spea
 
 The **Billion context** card, under **Server tools**, installs [billion-context-pi-pocket-adapter](https://github.com/vitalNohj/billion-context-pi-pocket-adapter) (context compression for long conversations) in the Pi Pocket the app runs on this computer, and turns it on. Pi Pocket must be running.
 
+<!-- Temporary note: remove when Pi Pocket accepts the desktop bridge. -->
+Ideally, only agents, meaning long-running sessions, would use billion-context, and regular sessions would not. Pi Pocket does not separate agents from sessions yet, and that is a big feature to add, so this app turns the extension on for all sessions, which is how I use it. I hope Pi Pocket adds an "Agents" feature where agents use this extension for their compaction and regular sessions do not. PiP, Pi Pocket's assistant, is an agent that should get billion-context.
+
 - **Install** downloads the newest commit of the adapter's `main` branch from GitHub, checks each file against the git hash the commit lists, and puts `billion-context-pi-pocket-adapter.ts` and its folder in Pi Pocket's `extensions` folder. Then it turns the extension on through Pi Pocket's API.
 - **Update** shows when a newer commit is out, at each start and as often as the app looks for its own updates. It turns the extension off, swaps the files, and turns it on again. **Update automatically** does this without asking (off by default).
 - **Uninstall** turns it off and removes those files. Its settings file (`billion-context-pi-pocket-adapter.json`) and its saved state stay.

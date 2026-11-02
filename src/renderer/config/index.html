@@ -250,6 +250,8 @@
                         <summary><h3>Billion context<span class="card-description">Keep long conversations going with context compression.</span></h3></summary>
                         <div class="rows">
                             <p class="row-note">This extension summarizes older messages. Pi can read the originals when needed. <a href="#" id="bc-page">About this extension</a></p>
+                            <!-- Temporary note: remove when Pi Pocket accepts the desktop bridge. -->
+                            <p class="row-note">Ideally, only agents, meaning long-running sessions, would use billion-context, and regular sessions would not. Pi Pocket does not separate agents from sessions yet, and that is a big feature to add, so this app turns the extension on for all sessions, which is how I use it. I hope Pi Pocket adds an "Agents" feature where agents use this extension for their compaction and regular sessions do not. PiP, Pi Pocket's assistant, is an agent that should get billion-context.</p>
                             <p class="row-note error" id="bc-message" role="alert" hidden></p>
                             <div id="bc-local">
                                 <div class="row"><span><strong id="bc-status">Not installed</strong><small id="bc-detail"></small></span><span class="buttons"><button type="button" class="primary" id="bc-install">Install</button><button type="button" class="primary" id="bc-update">Update</button><button type="button" class="secondary" id="bc-enable">Turn on</button><button type="button" class="secondary" id="bc-disable">Turn off</button><button type="button" class="secondary" id="bc-check">Check now</button><button type="button" class="secondary danger" id="bc-uninstall">Uninstall</button></span></div>
