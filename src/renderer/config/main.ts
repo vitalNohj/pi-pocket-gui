@@ -1099,6 +1099,8 @@ function renderRunner(next: ConfigState): void {
     element("runner-detail").textContent = detail;
     element("runner-how").hidden = link !== undefined && runner.status !== "ended";
     element("runner-enabled-row").classList.toggle("off", link === undefined);
+    element("runner-confirm-error").hidden = runner.confirmError === undefined;
+    element("runner-confirm-error").textContent = runner.confirmError ?? "";
 
     const restart = element<HTMLButtonElement>("runner-restart");
     const unlink = element<HTMLButtonElement>("runner-unlink");
