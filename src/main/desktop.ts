@@ -29,7 +29,7 @@ import { pinLabel, readBadge, readNotification, readPinned } from "./bridge-inpu
 import { offersAllow, showCall } from "./notice-text";
 import { buildTrayMenu, readAccent } from "./tray-menu";
 import { setUpTrayPopup } from "./tray-popup";
-import { NEW_SESSION_WAIT_MS, newSessionStep, readPageEvents } from "./new-session";
+import { type NewSessionView, PendingNewSession, readPageEvents } from "./new-session";
 
 /** What the bridge needs from the rest of the app. */
 export interface DesktopHost {
@@ -82,8 +82,6 @@ let badge = 0;
 let lastVisible: boolean | undefined;
 /** The host events the page said it handles, as it subscribed; undefined until it did. */
 let pageEvents: Set<string> | undefined;
-/** A New session waits for the page to subscribe (it is loading). */
-let newSessionWaits: NodeJS.Timeout | undefined;
 let trayIcons: { plain: NativeImage; dot: NativeImage; brand: string; dotColor: string } | undefined;
 
 export function setUpDesktop(host: DesktopHost): {
@@ -127,34 +125,13 @@ export function setUpDesktop(host: DesktopHost): {
         }
     };
 
-    const stopWaiting = (): void => {
-        clearTimeout(newSessionWaits);
-        newSessionWaits = undefined;
-    };
-
-    /** The next step of a New session, now that the window shows; "wait" comes back when the page subscribes. */
-    const continueNewSession = (starting = false): void => {
-        const step = host.serverLoaded() || starting
-            ? newSessionStep({ showingServer: host.showingServer(), pageEvents })
-            : "show";
-
-        if (step === "wait") {
-            stopWaiting();
-            newSessionWaits = setTimeout(stopWaiting, NEW_SESSION_WAIT_MS);
-
-            return;
-        }
-
-        stopWaiting();
-
-        if (step === "send") {
-            send({ type: "newSession" });
-        }
-    };
+    // A New session that waits for the page to subscribe (it is loading).
+    const pendingNewSession = new PendingNewSession(() => send({ type: "newSession" }));
+    const view = (): NewSessionView => ({ showingServer: host.showingServer(), serverLoaded: host.serverLoaded(), pageEvents });
 
     const newSession = (starting = false): void => {
         host.showWindow();
-        continueNewSession(starting);
+        pendingNewSession.request(view(), starting);
     };
 
     const open = (url: string): void => {
@@ -389,10 +366,7 @@ export function setUpDesktop(host: DesktopHost): {
         }
 
         pageEvents = readPageEvents(input);
-
-        if (newSessionWaits !== undefined) {
-            continueNewSession();
-        }
+        pendingNewSession.pageSubscribed(view());
     });
 
     ipcMain.on("host:invoke", (event, id: unknown) => {
@@ -441,6 +415,9 @@ export function setUpDesktop(host: DesktopHost): {
 
     return {
         visibilityChanged: () => {
+            // The settings screen shows: a New session asked for on the server no longer opens the sheet.
+            pendingNewSession.screenChanged(host.showingServer());
+
             const now = visible();
 
             if (now !== lastVisible) {

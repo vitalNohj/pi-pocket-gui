@@ -41,27 +41,118 @@ export function linkInArgv(argv: readonly string[]): string | undefined {
     return argv.find((arg) => arg.toLowerCase().startsWith(`${PROTOCOL}:`));
 }
 
+/** What New session finds as the window shows. */
+export interface NewSessionView {
+    /** The server view shows, not the settings screen. */
+    showingServer: boolean;
+    /** The server view has a server's page loaded, or loading. */
+    serverLoaded: boolean;
+    /** The host events the page said it handles (`pocketHost.subscribe`); undefined until it subscribed. */
+    pageEvents: ReadonlySet<string> | undefined;
+}
+
 /**
  * What New session does after the window shows:
  * - "send": the server's page shows and handles `newSession`: ask it to open the sheet.
- * - "show": nothing more. The settings screen shows, or the page is of an older Pi Pocket without `newSession`.
- * - "wait": the page has not said what it handles yet (it is loading, or not connected). Send once it does, if it
- *   handles `newSession` and shows by then.
+ * - "show": nothing more. The settings screen shows, no server is loaded, or the page is of an older Pi Pocket without
+ *   `newSession`. A request made on the settings screen never waits: the person asked there, not on the server.
+ * - "wait": the server's page shows but has not said what it handles yet (it is loading). Send once it does, if it
+ *   handles `newSession` and still shows. `starting`: the app was started for the request (a link) and connects
+ *   next, so it waits also on the settings screen the app starts with.
  */
-export function newSessionStep(input: {
-    showingServer: boolean;
-    /** The host events the page said it handles (`pocketHost.subscribe`); undefined until it subscribed. */
-    pageEvents: ReadonlySet<string> | undefined;
-}): "send" | "wait" | "show" {
-    if (input.pageEvents === undefined) {
+export function newSessionStep(view: NewSessionView, starting = false): "send" | "wait" | "show" {
+    if (starting && view.pageEvents === undefined) {
         return "wait";
     }
 
-    if (!input.showingServer) {
+    if (!view.showingServer || !view.serverLoaded) {
         return "show";
     }
 
-    return input.pageEvents.has("newSession") ? "send" : "show";
+    if (view.pageEvents === undefined) {
+        return "wait";
+    }
+
+    return view.pageEvents.has("newSession") ? "send" : "show";
+}
+
+/** The timers a pending request uses; the tests give their own. */
+export interface NewSessionTimers {
+    set: (run: () => void, ms: number) => unknown;
+    clear: (timer: unknown) => void;
+}
+
+/**
+ * The New session request that waits for the page (at most one). It ends when the page subscribes (it sends then, if
+ * it can), after `NEW_SESSION_WAIT_MS`, or when the window changes from the server to the settings screen: a request
+ * never opens the sheet after the person went to the settings.
+ */
+export class PendingNewSession {
+    readonly #send: () => void;
+    readonly #timers: NewSessionTimers;
+    readonly #waitMs: number;
+    #timer: unknown;
+    #waiting = false;
+    #showingServer: boolean | undefined;
+
+    constructor(
+        send: () => void,
+        timers: NewSessionTimers = { set: (run, ms) => setTimeout(run, ms), clear: (timer) => clearTimeout(timer as NodeJS.Timeout) },
+        waitMs = NEW_SESSION_WAIT_MS,
+    ) {
+        this.#send = send;
+        this.#timers = timers;
+        this.#waitMs = waitMs;
+    }
+
+    get waiting(): boolean {
+        return this.#waiting;
+    }
+
+    /** A New session, after the window shows. */
+    request(view: NewSessionView, starting = false): void {
+        this.#showingServer = view.showingServer;
+        this.#next(newSessionStep(view, starting));
+    }
+
+    /** The page subscribed and named its events: a waiting request goes on. */
+    pageSubscribed(view: NewSessionView): void {
+        this.#showingServer = view.showingServer;
+
+        if (this.#waiting) {
+            this.#next(newSessionStep(view));
+        }
+    }
+
+    /** The window shows the server view or the settings screen (again). */
+    screenChanged(showingServer: boolean): void {
+        const left = this.#showingServer === true && !showingServer;
+
+        this.#showingServer = showingServer;
+
+        if (left) {
+            this.cancel();
+        }
+    }
+
+    cancel(): void {
+        if (this.#waiting) {
+            this.#timers.clear(this.#timer);
+            this.#waiting = false;
+            this.#timer = undefined;
+        }
+    }
+
+    #next(step: "send" | "wait" | "show"): void {
+        this.cancel();
+
+        if (step === "wait") {
+            this.#waiting = true;
+            this.#timer = this.#timers.set(() => this.cancel(), this.#waitMs);
+        } else if (step === "send") {
+            this.#send();
+        }
+    }
 }
 
 /** The event types a page said it handles, checked: the page is another program. */
