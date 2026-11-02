@@ -1,8 +1,9 @@
 /**
  * This computer as a runner: the app runs `pi-pocket runner` (Pi Pocket's docs/runners.md) while it runs, so a Pi
  * Pocket server can run sessions' tools here: files and commands on this computer, the agent and its keys on the
- * server. It links with a one-time code the server's page gives (the bridge's `linkRunner`), keeps the link in the
- * app's own folder, and starts the runner again when it stops, unless the server ended the link for good.
+ * server. It is the same runner as on any computer, and the server cannot tell the difference: the person links it in
+ * the Runner card with the server's address and a one-time code from its Menu → Runners (`runner link`), the link
+ * stays in the app's own folder, and the app starts the runner again when it stops, unless the server ended the link.
  *
  * The runner comes from the Pi Pocket runtime the app installs (src/main/local-server.ts): one is installed for it
  * when there is none yet, also when the app connects to another server.
@@ -10,7 +11,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
-import { homedir, hostname } from "node:os";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { RunnerState } from "../shared/types";
 import { cleanLine } from "./local-versions";
@@ -57,13 +58,6 @@ interface Link {
     server: string;
     id: string;
     name: string;
-}
-
-/** The name this computer suggests for itself: its host name, without macOS's ".local" or a domain. */
-export function computerName(name = hostname()): string {
-    const short = name.replace(/\.local$/i, "").split(".")[0] ?? "";
-
-    return short.replace(/-/g, " ").trim().slice(0, 60) || "This computer";
 }
 
 /** A line the runner printed, without its time stamp's brackets doubled and without colors. */
@@ -455,11 +449,10 @@ export function setUpRunner(host: RunnerHost) {
                 enabled: host.enabled(),
                 ...(confirmationProblem === undefined ? {} : { confirmError: confirmationProblem }),
                 available: host.runtime() !== undefined,
-                computerName: computerName(),
                 log: lines.slice(-40),
             };
         },
-        /** The link, for the server's page: whether this computer is linked to it, and as which. */
+        /** The saved link: which server, and as which computer. */
         link: readLink,
         /** At the app's start: run it when it is on and linked. */
         boot: (): void => {

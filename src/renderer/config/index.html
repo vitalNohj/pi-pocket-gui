@@ -235,16 +235,16 @@
                             <label class="row" id="runner-confirm-row"><span><strong>Ask before new sessions</strong><small>Shows who wants to start a session and in which folder. Off: sessions start without asking.</small></span><input type="checkbox" data-key="runner.confirmSessions" /></label>
                             <label class="row" id="runner-http-row"><span><strong>Allow plain HTTP</strong><small>The runner uses HTTPS, or plain HTTP only to this computer or a device on your tailnet. Turn on only for a server on a network you trust.</small></span><input type="checkbox" data-key="runner.allowHttp" /></label>
                             <p class="row-note error" id="runner-confirm-error" role="alert" hidden></p>
-                            <div id="runner-how"><p class="row-note">Open your server in this app. Choose <strong>Menu → Runners → Link a computer → Link this computer</strong>. The app installs the runner and links this computer.</p></div>
+                            <div id="runner-link-form" class="runner-link-form">
+                                <p class="row-note">In Pi Pocket, open <strong>Menu → Runners → Link a computer</strong>, name this computer, and choose <strong>Get a link code</strong>. Enter the address and code it shows. The first link installs the runner (about 60 MB).</p>
+                                <div class="fields">
+                                    <label class="field grow"><span>Server address</span><input id="runner-server" type="text" spellcheck="false" autocomplete="off" placeholder="https://pocket.example.com" /></label>
+                                    <label class="field runner-code"><span>Link code</span><input id="runner-code" type="text" spellcheck="false" autocomplete="off" placeholder="ABCD-EFGH-JKLM" /></label>
+                                </div>
+                                <p class="row-note error" id="runner-link-error" role="alert" hidden></p>
+                                <div class="actions"><button type="button" class="primary" id="runner-link">Link</button></div>
+                            </div>
                             <p class="row-note security-note">Only you can start sessions here. They are private unless the server owner enables sharing. Anyone who can prompt a shared session can run commands here.</p>
-                            <details class="advanced" id="runner-elsewhere">
-                                <summary>Link another computer</summary>
-                                <ol class="steps">
-                                    <li><span>In Pi Pocket, open <strong>Menu → Runners → Link a computer</strong>. Name the computer and choose <strong>Link another computer</strong> (or <strong>Make a link code</strong> in a browser). The code expires after 10 minutes.</span></li>
-                                    <li><span>On that computer, install Node.js 22.19 or newer. Then install Pi Pocket:</span><div class="command"><code id="runner-install">npm install -g https://codeload.github.com/vitalNohj/pi-pocket/tar.gz/live-0.28</code><button type="button" class="ghost small" data-copy="runner-install">Copy</button></div></li>
-                                    <li><span>Run this command. Enter the server address and link code when asked:</span><div class="command"><code id="runner-serve">pi-pocket runner serve</code><button type="button" class="ghost small" data-copy="runner-serve">Copy</button></div><p>On Linux, it offers to start as a service at login. Run it again to use the saved link. No open port is needed.</p></li>
-                                </ol>
-                            </details>
                             <details class="log" id="runner-log-box" hidden><summary>Runner log</summary><pre id="runner-log"></pre></details>
                         </div>
                     </details>

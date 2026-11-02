@@ -148,12 +148,18 @@ export interface RunnerState {
     confirmError?: string;
     /** An installed Pi Pocket on this computer has the runner. */
     available: boolean;
-    /** The name this computer suggests for itself. */
-    computerName: string;
+    /** The server the app uses now, to fill in the link form's address. */
+    suggestedServer?: string;
     log: string[];
 }
 
 export type RunnerAction = "unlink" | "restart";
+
+/** The Runner card's link form: the server's address and the one-time code from its Menu → Runners. */
+export interface RunnerLinkRequest {
+    server: string;
+    code: string;
+}
 
 /** One speech model, as the settings show it. */
 export interface DictationModelState {
@@ -447,8 +453,6 @@ export interface HostHello {
     visible: boolean;
     /** Offline dictation can run here: the page's mic button uses it (src/main/dictation.ts). */
     dictation: boolean;
-    /** This computer's name, for "Link this computer" (the bridge's `runner` capability). */
-    computerName: string;
 }
 
 /** What the config page can ask of the main process. */
@@ -479,6 +483,8 @@ export interface GuiConfigApi {
     showDictationFolder(): Promise<void>;
     billionContext(action: BillionContextAction): Promise<void>;
     runner(action: RunnerAction): Promise<void>;
+    /** Link this computer with a code from the server's Menu → Runners; rejects with the runner's message. */
+    linkRunner(request: RunnerLinkRequest): Promise<void>;
     /** The main process asks to show a section of the settings, such as "dictation". */
     onFocus(listener: (section: string) => void): () => void;
     onState(listener: (state: ConfigState) => void): () => void;

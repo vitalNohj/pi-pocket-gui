@@ -128,9 +128,12 @@ With **Another server**, the card shows the command that installs it on that ser
 
 Use the **Runner** card under **Server tools**, or the **Runner** link at the top of Server settings. A runner lets your server use this computer's files and commands. The agent, models, API keys, and history stay on the server. No SSH or open port is needed.
 
-1. Open your server in the desktop app. Choose **Menu → Runners → Link a computer → Link this computer**. The app installs Node.js and Pi Pocket if needed, then links this computer with a one-time code.
-2. Under **Menu → Runners**, choose **New session** on this computer and pick a folder. The session title shows which computer it uses.
-3. Keep the app open, including in the tray. The **Runner** card shows the connection state. Use **Enable runner**, **Reconnect**, or **Unlink** to manage the link.
+The app has the same runner as `pi-pocket runner` built in, and links the same way: the server cannot tell them apart.
+
+1. In Pi Pocket, open **Menu → Runners → Link a computer**, name this computer, and choose **Get a link code**.
+2. In the app's **Runner** card, enter the server's address (filled in with the server the app uses) and the code, then choose **Link**. The first link installs Node.js and Pi Pocket for the runner if needed.
+3. Under **Menu → Runners**, choose **New session** on this computer and pick a folder. The session title shows which computer it uses.
+4. Keep the app open, including in the tray. The **Runner** card shows the connection state. Use **Enable runner**, **Reconnect**, or **Unlink** to manage the link.
 
 By default, the app asks before the server starts a new session or a copy of a session on this computer. The question shows the server, person, and folder; **Deny** is the default. A session can read and change files and run commands as you, also outside that folder. Turn off **Ask before new sessions** in the **Runner** card to start sessions without asking. The app saves the choice with `runner settings confirm on|off --config FILE`; no runner restart is needed. This needs a runner with session confirmation support; the card shows an error for an older runner.
 
@@ -138,14 +141,7 @@ The runner sends this computer's key and every command to the server, so it uses
 
 When the runner is off or the app is closed, the server shows this computer as offline. Its sessions cannot use tools here until it reconnects. Running commands continue through a connection drop of up to 2 minutes.
 
-**Link another computer:** open that section in the Runner card. On the server, choose **Menu → Runners → Link a computer**, then **Link another computer**. In a browser, choose **Make a link code** instead. The code expires after 10 minutes. On the other computer, install Node.js 22.19 or newer, then run:
-
-```sh
-npm install -g https://codeload.github.com/vitalNohj/pi-pocket/tar.gz/live-0.28
-pi-pocket runner serve
-```
-
-Enter the server address and link code when asked. On Linux, the runner offers to start as a service at login. Run the command again to use the saved link.
+**Link another computer:** the same code from **Menu → Runners → Link a computer**. Pi Pocket shows the commands for a computer without this app.
 
 **Access:** only you can start sessions on a computer you linked. These sessions are private by default. The server owner can enable **Share sessions on linked computers** under **Menu → Runners**. Anyone who can prompt a shared session can run commands on that computer.
 
