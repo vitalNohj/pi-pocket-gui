@@ -40,6 +40,8 @@ export interface RunnerHost {
     enabled: () => boolean;
     setEnabled: (enabled: boolean) => Promise<void>;
     confirmSessions: () => boolean;
+    /** Whether the person allows plain HTTP to a server that is not this computer or on their tailnet. */
+    allowHttp: () => boolean;
     /** Show one question. Aborting the signal must close it. Errors deny the request. */
     ask: (request: RunnerConfirmation, signal: AbortSignal) => Promise<boolean>;
     /** The installed runtime to run it from; undefined when there is none with the runner. */
@@ -161,9 +163,10 @@ export function setUpRunner(host: RunnerHost) {
 
             try {
                 await runOnce(["settings", "confirm", host.confirmSessions() ? "on" : "off"]);
+                await runOnce(["settings", "http", host.allowHttp() ? "allow" : "refuse"]);
                 confirmError = undefined;
             } catch (error) {
-                confirmError = `Could not set session confirmation: ${(error as Error).message}`;
+                confirmError = `Could not save the runner's settings: ${(error as Error).message}`;
                 log(confirmError);
             }
 
@@ -491,7 +494,7 @@ export function setUpRunner(host: RunnerHost) {
                     await mkdir(host.home, { recursive: true });
                     busy = "Linking this computer…";
                     host.changed();
-                    log(await runOnce(["link", server, code]));
+                    log(await runOnce(["link", server, code, ...(host.allowHttp() ? ["--allow-http"] : [])]));
                     await syncConfirmation();
                     failures = 0;
                     await host.setEnabled(true);

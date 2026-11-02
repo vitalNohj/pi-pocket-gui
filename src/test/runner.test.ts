@@ -23,6 +23,7 @@ function host(home: string, overrides: Partial<RunnerHost> = {}): RunnerHost {
             enabled = next;
         },
         confirmSessions: () => true,
+        allowHttp: () => false,
         ask: async () => false,
         runtime: () => undefined,
         prepare: async () => {},
@@ -82,6 +83,11 @@ if (args[1] === "link") {
     link.confirmSessions = args[3] === "on";
     writeFileSync(file, JSON.stringify(link));
     console.log("confirm " + args[3]);
+} else if (args[1] === "settings" && args[2] === "http") {
+    const link = JSON.parse(readFileSync(file, "utf8"));
+    link.allowHttp = args[3] === "allow";
+    writeFileSync(file, JSON.stringify(link));
+    console.log("http " + args[3]);
 } else {
     const error = ${JSON.stringify(options.legacyError ?? "")};
     if (error && args.includes("--confirm-via")) { console.error(error); process.exit(1); }
@@ -374,6 +380,35 @@ test("settings confirm on|off runs after linking, on setting changes, and before
     }
 });
 
+test("Allow plain HTTP goes with the link and is saved on every change, without a restart", async () => {
+    const home = mkdtempSync(join(tmpdir(), "runner-"));
+    const runtime = fakeRuntime(home);
+    let allow = true;
+    const runner = setUpRunner(host(home, { runtime: () => runtime, allowHttp: () => allow }));
+    const http = () => calls(home).filter((args) => args[1] === "settings" && args[2] === "http");
+    const saved = () => (JSON.parse(readFileSync(join(home, "runner.json"), "utf8")) as { allowHttp?: boolean }).allowHttp;
+
+    try {
+        await runner.linkTo("http://pocket.lan:8787", "GOOD-CODE");
+        await until(() => runner.state().status === "connected", "connected");
+        assert.deepEqual(
+            calls(home).find((args) => args[1] === "link")?.slice(1, 5),
+            ["link", "http://pocket.lan:8787", "GOOD-CODE", "--allow-http"],
+        );
+        assert.equal(http().at(-1)?.[3], "allow");
+        assert.equal(saved(), true);
+
+        allow = false;
+        await runner.confirmChanged();
+        assert.equal(http().at(-1)?.[3], "refuse");
+        assert.equal(saved(), false);
+        assert.equal(calls(home).filter((args) => args[1] === "--confirm-via").length, 1, "no restart");
+    } finally {
+        await runner.quit();
+        rmSync(home, { recursive: true, force: true });
+    }
+});
+
 test("a failed settings confirm command is in the runner log and card even when connected", async () => {
     const home = mkdtempSync(join(tmpdir(), "runner-"));
     const runtime = fakeRuntime(home, { confirmError: "pi-pocket runner: link is read-only" });
@@ -382,7 +417,7 @@ test("a failed settings confirm command is in the runner log and card even when 
     try {
         await runner.linkTo("https://pocket.example", "GOOD-CODE");
         await until(() => runner.state().status === "connected", "connected");
-        assert.match(runner.state().confirmError ?? "", /Could not set session confirmation: link is read-only/);
+        assert.match(runner.state().confirmError ?? "", /Could not save the runner's settings: link is read-only/);
         assert.ok(runner.state().log.some((line) => line.includes("link is read-only")));
     } finally {
         await runner.quit();

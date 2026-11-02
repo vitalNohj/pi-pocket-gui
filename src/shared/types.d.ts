@@ -125,6 +125,8 @@ export interface Settings {
         enabled: boolean;
         /** Ask on this computer before the server starts a new session or a fork. */
         confirmSessions: boolean;
+        /** Allow plain HTTP to a server that is not this computer or a device on the person's tailnet. */
+        allowHttp: boolean;
     };
 }
 

@@ -128,6 +128,8 @@ Use the **Runner** card under **Server tools**, or the **Runner** link at the to
 
 By default, the app asks before the server starts a new session or a copy of a session on this computer. The question shows the server, person, and folder; **Deny** is the default. A session can read and change files and run commands as you, also outside that folder. Turn off **Ask before new sessions** in the **Runner** card to start sessions without asking. The app saves the choice with `runner settings confirm on|off --config FILE`; no runner restart is needed. This needs a runner with session confirmation support; the card shows an error for an older runner.
 
+The runner sends this computer's key and every command to the server, so it uses HTTPS. It uses plain HTTP only to this computer or to a device on your tailnet, which it checks with Tailscale itself. To link a server on another plain HTTP address, turn on **Allow plain HTTP** in the **Runner** card first, and only on a network you trust.
+
 When the runner is off or the app is closed, the server shows this computer as offline. Its sessions cannot use tools here until it reconnects. Running commands continue through a connection drop of up to 2 minutes.
 
 **Link another computer:** open that section in the Runner card. On the server, choose **Menu → Runners → Link a computer**, then **Link another computer**. In a browser, choose **Make a link code** instead. The code expires after 10 minutes. On the other computer, install Node.js 22.19 or newer, then run:

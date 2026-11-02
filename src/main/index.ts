@@ -363,6 +363,7 @@ async function start(): Promise<void> {
         platform: process.platform,
         enabled: () => gui!.settings.runner.enabled,
         confirmSessions: () => gui!.settings.runner.confirmSessions,
+        allowHttp: () => gui!.settings.runner.allowHttp,
         ask: (request, signal) => askRunnerSession(window, request, signal),
         setEnabled: async (enabled) => {
             const state = gui!;
@@ -1539,7 +1540,10 @@ function registerIpc(): void {
         state.local?.rescheduleUpdates();
         state.billionContext?.reschedule();
 
-        if (before.runner.confirmSessions !== state.settings.runner.confirmSessions) {
+        if (
+            before.runner.confirmSessions !== state.settings.runner.confirmSessions ||
+            before.runner.allowHttp !== state.settings.runner.allowHttp
+        ) {
             void state.runner?.confirmChanged();
         }
 
